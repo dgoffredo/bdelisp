@@ -1,5 +1,6 @@
 #include <bsl_cstddef.h>
 #include <bsl_iostream.h>
+#include <bsl_sstream.h>
 #include <bsl_string.h>
 #include <bsl_string_view.h>
 #include <bsls_assert.h>
@@ -10,20 +11,24 @@ namespace {
 
 int lexer() {
     lspcore::Lexer lexer;
-    bsl::string subject;
-    while (bsl::getline(bsl::cin, subject)) {
-        if (const int rc = lexer.reset(subject)) {
-            bsl::cerr << "Failed to reset Lexer.\n";
-            return rc;
-        }
+    bsl::stringstream input;
 
-        lspcore::LexerToken token;
-        while (lexer.next(&token) == 0 && token.kind != lspcore::LexerToken::e_EOF) {
+    input << bsl::cin.rdbuf();
+    bsl::string subject = input.str();
+
+    if (const int rc = lexer.reset(subject)) {
+        bsl::cerr << "Failed to reset Lexer.\n";
+        return rc;
+    }
+
+    lspcore::LexerToken token;
+    while (lexer.next(&token) == 0 && token.kind != lspcore::LexerToken::e_EOF) {
+        if (token.kind != lspcore::LexerToken::e_WHITESPACE) {
             bsl::cout << token << "\n";
         }
-
-        std::cout << "\n";
     }
+
+    std::cout << "\n";
 
     return 0;
 }

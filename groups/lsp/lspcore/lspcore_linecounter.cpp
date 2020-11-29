@@ -42,6 +42,7 @@ void LineCounter::advanceToOffset(
         return;
     }
 
+    // TODO: might be a bug here when input ends with '\n'
     const bsl::size_t numNewlines = 
         1 + bsl::count(first + 1, first + lastNewline, '\n');
 
