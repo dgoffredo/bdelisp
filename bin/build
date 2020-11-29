@@ -1,0 +1,7 @@
+#!/bin/sh
+
+mkdir -p build
+cd build
+
+cmake -GNinja -DCMAKE_PREFIX_PATH=/home/david/src/bde/_install/opt/bb/lib64/opt_exc_mt/ ../
+cmake --build ./
