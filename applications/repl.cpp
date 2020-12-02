@@ -4,16 +4,56 @@
 #include <bsl_sstream.h>
 #include <bsl_string.h>
 #include <bsl_string_view.h>
+#include <bsl_vector.h>
 #include <bslma_default.h>
 #include <bsls_assert.h>
 #include <lspcore_lexer.h>
 #include <lspcore_linecounter.h>
+#include <lspcore_listutil.h>
 #include <lspcore_symbolutil.h>
 
 namespace {
 
 namespace bdld  = BloombergLP::bdld;
 namespace bslma = BloombergLP::bslma;
+
+int lister() {
+    lspcore::Lexer    lexer;
+    bsl::string subject;
+    bsl::ostringstream datumish;
+    const int typeOffset = 0;
+    bslma::Allocator *allocator = bslma::Default::allocator();
+
+    while (bsl::getline(bsl::cin, subject)) {
+        if (const int rc = lexer.reset(subject)) {
+            bsl::cerr << "Failed to reset Lexer.\n";
+            return rc;
+        }
+
+        lspcore::LexerToken token;
+        bsl::vector<bdld::Datum> data;
+        while (lexer.next(&token) == 0 &&
+            token.kind != lspcore::LexerToken::e_EOF) {
+            if (token.kind == lspcore::LexerToken::e_WHITESPACE) {
+                continue;
+            }
+            datumish << token;
+            data.push_back(bdld::Datum::copyString(datumish.str(), allocator));
+            datumish.str(bsl::string());
+        }
+
+        bdld::Datum list = lspcore::ListUtil::createList(data, typeOffset, allocator);
+        lspcore::ListUtil::hackPrint(list);
+        bsl::cout << "\n";
+
+        list = lspcore::ListUtil::createImproperList(data, typeOffset, allocator);
+        lspcore::ListUtil::hackPrint(list);
+        bsl::cout << "\n";
+    }
+
+    std::cout << "\n";
+    return 0;
+}
 
 int lexer() {
     lspcore::Lexer    lexer;
@@ -84,6 +124,8 @@ int main(int argc, char* argv[]) {
     bsl::string_view which = argv[1];
     if (which == "lexer") {
         return lexer();
+    } else if (which == "lister") {
+        return lister();
     }
 
     BSLS_ASSERT_OPT(which == "counter");
