@@ -33,6 +33,7 @@ struct Pair {
 
     // TODO: document
     static const Pair& access(const bdld::Datum& pair);
+    static const Pair& access(const bdld::DatumUdt& pair);
 };
 
 inline Pair::Pair(const bdld::Datum& first, const bdld::Datum& second)
@@ -57,7 +58,11 @@ inline const Pair& Pair::access(const bdld::Datum& pair) {
     // "udt" means "user-defined type"
     BSLS_ASSERT_SAFE(pair.isUdt());
 
-    const bdld::DatumUdt udt = pair.theUdt();
+    return access(pair.theUdt());
+}
+
+inline const Pair& Pair::access(const bdld::DatumUdt& udt) {
+    // "udt" means "user-defined type"
     BSLS_ASSERT_SAFE(udt.data());
 
     return *static_cast<const Pair*>(udt.data());

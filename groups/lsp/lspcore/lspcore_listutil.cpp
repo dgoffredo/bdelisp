@@ -1,4 +1,4 @@
-#include <bsl_iostream.h> // TODO: no
+#include <bsl_iostream.h>  // TODO: no
 #include <bsls_assert.h>
 #include <lspcore_listutil.h>
 #include <lspcore_pair.h>
@@ -26,13 +26,18 @@ bdld::Datum ListUtil::createImproperList(
     BSLS_ASSERT(elements.size() >= 2);
 
     typedef bsl::vector<bdld::Datum>::const_reverse_iterator Iter;
-    Iter        iter         = elements.rbegin();
+    Iter iter = elements.rbegin();
+
+    // the last two elements are definitely paired together
     bdld::Datum improperList = *iter;
-    do {
-        ++iter;
+    ++iter;
+    improperList = Pair::create(*iter, improperList, typeOffset, allocator);
+
+    // and there might be more
+    while (++iter != elements.rend()) {
         improperList =
             Pair::create(*iter, improperList, typeOffset, allocator);
-    } while (iter != elements.rend());
+    }
 
     return improperList;
 }
@@ -52,7 +57,8 @@ void ListUtil::hackPrint(const bdld::Datum& list) {
                 const Pair& pair = Pair::access(item);
                 bsl::cout << " " << pair.first;
                 item = pair.second;
-            } else {
+            }
+            else {
                 bsl::cout << " . " << item;
                 break;
             }

@@ -10,6 +10,7 @@
 #include <lspcore_lexer.h>
 #include <lspcore_linecounter.h>
 #include <lspcore_listutil.h>
+#include <lspcore_printutil.h>
 #include <lspcore_symbolutil.h>
 
 namespace {
@@ -18,11 +19,11 @@ namespace bdld  = BloombergLP::bdld;
 namespace bslma = BloombergLP::bslma;
 
 int lister() {
-    lspcore::Lexer    lexer;
-    bsl::string subject;
+    lspcore::Lexer     lexer;
+    bsl::string        subject;
     bsl::ostringstream datumish;
-    const int typeOffset = 0;
-    bslma::Allocator *allocator = bslma::Default::allocator();
+    const int          typeOffset = 0;
+    bslma::Allocator*  allocator  = bslma::Default::allocator();
 
     while (bsl::getline(bsl::cin, subject)) {
         if (const int rc = lexer.reset(subject)) {
@@ -30,10 +31,10 @@ int lister() {
             return rc;
         }
 
-        lspcore::LexerToken token;
+        lspcore::LexerToken      token;
         bsl::vector<bdld::Datum> data;
         while (lexer.next(&token) == 0 &&
-            token.kind != lspcore::LexerToken::e_EOF) {
+               token.kind != lspcore::LexerToken::e_EOF) {
             if (token.kind == lspcore::LexerToken::e_WHITESPACE) {
                 continue;
             }
@@ -42,13 +43,18 @@ int lister() {
             datumish.str(bsl::string());
         }
 
-        bdld::Datum list = lspcore::ListUtil::createList(data, typeOffset, allocator);
+        bdld::Datum list =
+            lspcore::ListUtil::createImproperList(data, typeOffset, allocator);
         lspcore::ListUtil::hackPrint(list);
         bsl::cout << "\n";
+        lspcore::PrintUtil::print(bsl::cout, list, typeOffset);
+        bsl::cout << "\n\n";
 
-        list = lspcore::ListUtil::createImproperList(data, typeOffset, allocator);
+        list = lspcore::ListUtil::createList(data, typeOffset, allocator);
         lspcore::ListUtil::hackPrint(list);
         bsl::cout << "\n";
+        lspcore::PrintUtil::print(bsl::cout, list, typeOffset);
+        bsl::cout << "\n\n";
     }
 
     std::cout << "\n";
@@ -124,7 +130,8 @@ int main(int argc, char* argv[]) {
     bsl::string_view which = argv[1];
     if (which == "lexer") {
         return lexer();
-    } else if (which == "lister") {
+    }
+    else if (which == "lister") {
         return lister();
     }
 

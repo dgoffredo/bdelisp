@@ -1,8 +1,6 @@
 #include <baljsn_printutil.h>
 #include <bdlb_arrayutil.h>
 #include <bsl_iostream.h>  // TODO: no
-#include <bsl_ostream.h>   // TODO: no
-#include <bsl_string.h>    // TODO: no
 #include <bsls_assert.h>
 #include <lspcore_lexer.h>
 
@@ -48,7 +46,7 @@ const LexerToken::Kind k_subpatterns[] = {
 #define STRING R"re("(?:[^"]|\\.)*")re"
     LexerToken::e_STRING,
 // Restricting bytes to valid base64 will happen in the parser.
-#define BYTES "#b64" STRING
+#define BYTES "#base64" STRING
     LexerToken::e_BYTES,
 // Restriction to allowed numeric values will happen in the parser.
 // This pattern is based on the railroad diagram for numbers at <json.org>,
@@ -181,19 +179,6 @@ const char k_SYMBOL_PATTERN[] =
 #undef PAIR_SEPARATOR
 
 #undef OR
-
-// TODO: no, no
-void print(const bsl::vector<bsl::pair<bsl::size_t, bsl::size_t> >& results) {
-    bsl::cout << "[";
-    for (const auto& p : results) {
-        bsl::cout << " (";
-        if (p.first != bdlpcre::RegEx::k_INVALID_OFFSET) {
-            bsl::cout << p.first << " " << p.second;
-        }
-        bsl::cout << ") ";
-    }
-    bsl::cout << "]";
-}
 
 int prepare(bdlpcre::RegEx* regex, const char* pattern) {
     BSLS_ASSERT(regex);

@@ -29,6 +29,7 @@ struct SymbolUtil {
 
     // TODO: document
     static bdld::Datum access(const bdld::Datum& symbol);
+    static bdld::Datum access(const bdld::DatumUdt& symbol);
 
     static bool isSymbol(const bdld::Datum& datum, int typeOffset);
 
@@ -50,8 +51,8 @@ inline bool SymbolUtil::isSymbol(const bdld::Datum& datum, int typeOffset) {
 }
 
 // Symbols containing very small strings are optimized to reside within the
-// 'bdld::Datum' itself. One byte of the internal 'void*' is reserved, but the
-// other bytes may contain a UTF-8 sequence. On 64-bit systems we can store
+// 'bdld::DatumUdt' itself. One byte of the internal 'void*' is reserved, but
+// the other bytes may contain a UTF-8 sequence. On 64-bit systems we can store
 // seven bytes of UTF-8. On 32-bit systems we can store three bytes of UTF-8.
 //
 // Three bytes doesn't seem like much, but it covers:
@@ -156,7 +157,11 @@ inline bdld::Datum SymbolUtil::createOutOfPlace(const bdld::Datum& stringValue,
 
 inline bdld::Datum SymbolUtil::access(const bdld::Datum& symbol) {
     // udt stands for "user-defined type"
-    bdld::DatumUdt udt = symbol.theUdt();
+    return access(symbol.theUdt());
+}
+
+inline bdld::Datum SymbolUtil::access(const bdld::DatumUdt& udt) {
+    // udt stands for "user-defined type"
     if (reinterpret_cast<bsls::Types::UintPtr>(udt.data()) & 1) {
         return accessInPlace(udt);
     }
