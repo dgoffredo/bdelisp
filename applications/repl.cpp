@@ -45,14 +45,10 @@ int lister() {
 
         bdld::Datum list =
             lspcore::ListUtil::createImproperList(data, typeOffset, allocator);
-        lspcore::ListUtil::hackPrint(list);
-        bsl::cout << "\n";
         lspcore::PrintUtil::print(bsl::cout, list, typeOffset);
         bsl::cout << "\n\n";
 
         list = lspcore::ListUtil::createList(data, typeOffset, allocator);
-        lspcore::ListUtil::hackPrint(list);
-        bsl::cout << "\n";
         lspcore::PrintUtil::print(bsl::cout, list, typeOffset);
         bsl::cout << "\n\n";
     }

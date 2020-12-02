@@ -1,4 +1,3 @@
-#include <bsl_iostream.h>  // TODO: no
 #include <bsls_assert.h>
 #include <lspcore_listutil.h>
 #include <lspcore_pair.h>
@@ -40,32 +39,6 @@ bdld::Datum ListUtil::createImproperList(
     }
 
     return improperList;
-}
-
-void ListUtil::hackPrint(const bdld::Datum& list) {
-    bsl::cout << "(";
-
-    bdld::Datum item = list;
-    if (!item.isNull()) {
-        const Pair& pair = Pair::access(item);
-        bsl::cout << pair.first;
-        item = pair.second;
-
-        while (!item.isNull()) {
-            const int typeOffset = 0;
-            if (Pair::isPair(item, typeOffset)) {
-                const Pair& pair = Pair::access(item);
-                bsl::cout << " " << pair.first;
-                item = pair.second;
-            }
-            else {
-                bsl::cout << " . " << item;
-                break;
-            }
-        }
-    }
-
-    bsl::cout << ")";
 }
 
 }  // namespace lspcore

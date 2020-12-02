@@ -41,9 +41,6 @@ struct ListUtil {
         const bsl::vector<bdld::Datum>& elements,
         int                             typeOffset,
         bslma::Allocator*               allocator);
-
-    // TODO: no
-    static void hackPrint(const bdld::Datum& list);
 };
 
 }  // namespace lspcore
