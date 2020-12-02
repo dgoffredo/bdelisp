@@ -5,21 +5,21 @@ namespace lspcore {
 void LineCounter::reset(bsl::string_view string) {
     d_offset = 0;
     if (string.empty()) {
-        d_line = 1;
+        d_line   = 1;
         d_column = 0;
-    } else {
-        d_line = string[0] == '\n' ? 2 : 1;
+    }
+    else {
+        d_line   = string[0] == '\n' ? 2 : 1;
         d_column = string[0] == '\n' ? 0 : 1;
     }
 }
 
-void LineCounter::advanceToOffset(
-    bsl::string_view string, bsl::size_t absoluteOffset) {
-
-    const char *last = string.data() + absoluteOffset;
+void LineCounter::advanceToOffset(bsl::string_view string,
+                                  bsl::size_t      absoluteOffset) {
+    const char* last = string.data() + absoluteOffset;
     BSLS_ASSERT(last <= string.end());
 
-    const char *first = string.data() + d_offset;
+    const char* first = string.data() + d_offset;
     if (first == last) {
         return;
     }
@@ -36,7 +36,7 @@ void LineCounter::advanceToOffset(
 
     const bsl::size_t lastNewline =
         bsl::string_view(first + 1, last - first).rfind('\n');
-    
+
     if (lastNewline == bsl::string_view::npos) {
         d_column += last - first;
         return;
@@ -49,4 +49,4 @@ void LineCounter::advanceToOffset(
     d_column = last - (first + 1 + lastNewline);
 }
 
-}  // close namespace lspcore
+}  // namespace lspcore

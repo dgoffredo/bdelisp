@@ -1,16 +1,22 @@
+#include <bdld_datum.h>
 #include <bsl_cstddef.h>
 #include <bsl_iostream.h>
 #include <bsl_sstream.h>
 #include <bsl_string.h>
 #include <bsl_string_view.h>
+#include <bslma_default.h>
 #include <bsls_assert.h>
 #include <lspcore_lexer.h>
 #include <lspcore_linecounter.h>
+#include <lspcore_symbolutil.h>
 
 namespace {
 
+namespace bdld  = BloombergLP::bdld;
+namespace bslma = BloombergLP::bslma;
+
 int lexer() {
-    lspcore::Lexer lexer;
+    lspcore::Lexer    lexer;
     bsl::stringstream input;
 
     input << bsl::cin.rdbuf();
@@ -22,8 +28,17 @@ int lexer() {
     }
 
     lspcore::LexerToken token;
-    while (lexer.next(&token) == 0 && token.kind != lspcore::LexerToken::e_EOF) {
-        if (token.kind != lspcore::LexerToken::e_WHITESPACE) {
+    while (lexer.next(&token) == 0 &&
+           token.kind != lspcore::LexerToken::e_EOF) {
+        if (token.kind == lspcore::LexerToken::e_SYMBOL) {
+            bsl::cout << token << "\n";
+            bdld::Datum symbol = lspcore::SymbolUtil::create(
+                token.text, 0, bslma::Default::allocator());
+            bsl::cout << "The symbol UDT: " << symbol << "\n"
+                      << "The symbol string: "
+                      << lspcore::SymbolUtil::access(symbol) << "\n";
+        }
+        else if (token.kind != lspcore::LexerToken::e_WHITESPACE) {
             bsl::cout << token << "\n";
         }
     }
@@ -35,7 +50,7 @@ int lexer() {
 
 int counter() {
     const bsl::string_view string = "I'm a giant\nfish and now\nso can you!";
-    lspcore::LineCounter counter;
+    lspcore::LineCounter   counter;
     counter.reset(string.data());
 
     const auto lookFor = [&](bsl::string_view what) {
@@ -47,8 +62,8 @@ int counter() {
         counter.advanceToOffset(string.data(), offset);
 
         std::cout << "counter is at line " << counter.line() << " column "
-            << counter.column() << " corresponding to offset "
-            << counter.offset() << "\n\n";
+                  << counter.column() << " corresponding to offset "
+                  << counter.offset() << "\n\n";
     };
 
     lookFor("\n");
@@ -61,9 +76,9 @@ int counter() {
     return 0;
 }
 
-}  // close unnamed namespace
+}  // namespace
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     BSLS_ASSERT_OPT(argc == 2);
 
     bsl::string_view which = argv[1];

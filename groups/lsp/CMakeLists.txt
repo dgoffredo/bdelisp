@@ -1,6 +1,9 @@
 add_library(lsp
     lspcore/lspcore_lexer.cpp
-    lspcore/lspcore_linecounter.cpp)
+    lspcore/lspcore_linecounter.cpp
+    lspcore/lspcore_pair.cpp
+    lspcore/lspcore_userdefinedtypes.cpp
+    lspcore/lspcore_symbolutil.cpp)
 
 find_package(bal REQUIRED)
 find_package(bdl REQUIRED)

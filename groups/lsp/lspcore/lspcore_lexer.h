@@ -7,16 +7,23 @@
 #include <bsl_string_view.h>
 #include <bsl_utility.h>
 #include <bsl_vector.h>
-#include <bslma_allocator.h>
 #include <lspcore_linecounter.h>
+
+namespace BloombergLP {
+namespace bslma {
+class Allocator;
+}  // namespace bslma
+}  // namespace BloombergLP
 
 namespace lspcore {
 namespace bdlpcre = BloombergLP::bdlpcre;
-namespace bslma = BloombergLP::bslma;
-namespace bslstl = BloombergLP::bslstl;
+namespace bslma   = BloombergLP::bslma;
+namespace bslstl  = BloombergLP::bslstl;
 
 struct LexerToken {
-    // TODO: document
+    // This 'struct' represents a lexical chunk of text input. It contains a
+    // 'string_view' of the relevant chunk of text, as well as the text's
+    // position in the input.
 
     enum Kind {
         e_WHITESPACE,
@@ -56,14 +63,14 @@ struct LexerToken {
         e_PAIR_SEPARATOR
     };
 
-    static const char *toAscii(Kind kind);
-        // Return a pointer to a null-terminated string containing the name of
-        // the specified token 'kind'. The behavior is undefined unless 'kind'
-        // is one of the enumerated values.
+    // Return a pointer to a null-terminated string containing the name of
+    // the specified token 'kind'. The behavior is undefined unless 'kind'
+    // is one of the enumerated values.
+    static const char* toAscii(Kind kind);
 
-    Kind kind;
+    Kind             kind;
     bsl::string_view text;
-    bsl::size_t offset; // from the beginning of the input
+    bsl::size_t      offset;  // from the beginning of the input
 
     // Lines and columns are numbered starting at one, with the exception of
     // newline characters, which are considered to occupy column zero.
@@ -76,48 +83,47 @@ struct LexerToken {
     bsl::size_t endColumn;
 };
 
+// Insert the specified 'token' into the specified 'stream'. Return a
+// reference providing modifiable access to 'stream'. Note that the format
+// is unspecified and is intended for use in debugging.
 bsl::ostream& operator<<(bsl::ostream& stream, const LexerToken& token);
-    // Insert the specified 'token' into the specified 'stream'. Return a
-    // reference providing modifiable access to 'stream'. Note that the format
-    // is unspecified and is intended for use in debugging.
 
+// TODO: document
 class Lexer {
-    // TODO: document
-
     bsl::vector<bsl::pair<bsl::size_t, bsl::size_t> > d_results;
-    bdlpcre::RegEx d_tokenRegex;
-    bdlpcre::RegEx d_symbolRegex;
-    bsl::string_view d_subject;
-    bsl::size_t d_offset;
-    LineCounter d_position;
-    LexerToken d_extra; // in case the previous 'next' found two tokens
+    bdlpcre::RegEx                                    d_tokenRegex;
+    bdlpcre::RegEx                                    d_symbolRegex;
+    bsl::string_view                                  d_subject;
+    bsl::size_t                                       d_offset;
+    LineCounter                                       d_position;
+    LexerToken d_extra;  // in case the previous 'next' found two tokens
 
   public:
-    explicit Lexer(bslma::Allocator *allocator = 0);
-        // TODO: document
+    // TODO: document
+    explicit Lexer(bslma::Allocator* allocator = 0);
 
+    // TODO: document
+    // TODO: in particular, that the data referred to by 'subject' must
+    // live until either this object is destroyed or reset is called again.
     int reset(bsl::string_view subject);
-        // TODO: document
-        // TODO: in particular, that the data referred to by 'subject' must
-        // live until either this object is destroyed or reset is called again.
 
-    int next(LexerToken *token);
-        // Scan the next token in the current subject. On success, assign the
-        // scanned token through the specified 'token' and return zero. If
-        // there is no more input, then assign a token of kind 'e_EOF'. If
-        // input remains but a token cannot be scanned, return a nonzero value
-        // without assigning through 'token'.
+    // Scan the next token in the current subject. On success, assign the
+    // scanned token through the specified 'token' and return zero. If
+    // there is no more input, then assign a token of kind 'e_EOF'. If
+    // input remains but a token cannot be scanned, return a nonzero value
+    // without assigning through 'token'.
+    int next(LexerToken* token);
 
+    // TODO: document
     bsl::size_t offset() const;
-        // TODO: document
 
+    // TODO: document
     bsl::size_t line() const;
-        // TODO: document
 
+    // TODO: document
     bsl::size_t column() const;
-        // TODO: document
 };
 
-}  // close namespace lspcore
+}  // namespace lspcore
 
 #endif

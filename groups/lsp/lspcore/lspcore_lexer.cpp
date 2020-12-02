@@ -1,10 +1,10 @@
-#include <lspcore_lexer.h>
 #include <baljsn_printutil.h>
 #include <bdlb_arrayutil.h>
-#include <bsl_iostream.h> // TODO: no
-#include <bsl_ostream.h> // TODO: no
-#include <bsl_string.h> // TODO: no
+#include <bsl_iostream.h>  // TODO: no
+#include <bsl_ostream.h>   // TODO: no
+#include <bsl_string.h>    // TODO: no
 #include <bsls_assert.h>
+#include <lspcore_lexer.h>
 
 using namespace BloombergLP;
 
@@ -13,9 +13,10 @@ namespace {
 
 // TODO: hack hack
 // bsl::ostream debug(bsl::cerr.rdbuf()); // with debug output
-bsl::ostream debug(0); // no debug output
+bsl::ostream debug(0);  // no debug output
 
-// TODO: comment about how all of the subpatterns must avoid capturing subgroups.
+// TODO: comment about how all of the subpatterns must avoid capturing
+// subgroups.
 
 // In order to distinguish individual tokens from their concatenations, we need
 // to surround certain patterns with lookbehinds and lookaheads. For example,
@@ -24,21 +25,19 @@ bsl::ostream debug(0); // no debug output
 // "(42)" or in "'('42[x])" is still a valid integer token. What is needed is
 // to distinguish a pattern as "delimited" by constraining what may precede and
 // follow it.
-#define DELIMITED_LEFT(PATTERN) \
-    /* allowed preceding character (lookbehind) */ \
-    /* (either beginning of string, or an allowed character) */ \
-    R"re((?:(?<=^)|(?<=[\s[\](){}",'`@!])))re" \
-    /* the original pattern */ \
-    PATTERN
+#define DELIMITED_LEFT(PATTERN)                                           \
+    /* allowed preceding character (lookbehind) */                        \
+    /* (either beginning of string, or an allowed character) */           \
+    R"re((?:(?<=^)|(?<=[\s[\](){}",'`@!])))re" /* the original pattern */ \
+        PATTERN
 
-#define DELIMITED_RIGHT(PATTERN) \
-    PATTERN \
-    /* allowed following character (lookahead) */ \
+#define DELIMITED_RIGHT(PATTERN)                          \
+    PATTERN                                               \
+    /* allowed following character (lookahead) */         \
     /* (either end of string, or an allowed character) */ \
     R"re((?:(?=$)|(?=[\s[\](){}";])))re"
 
-#define DELIMITED(PATTERN) \
-    DELIMITED_RIGHT(DELIMITED_LEFT(PATTERN))
+#define DELIMITED(PATTERN) DELIMITED_RIGHT(DELIMITED_LEFT(PATTERN))
 
 // 'k_subpatterns' TODO document
 const LexerToken::Kind k_subpatterns[] = {
@@ -55,12 +54,12 @@ const LexerToken::Kind k_subpatterns[] = {
 // This pattern is based on the railroad diagram for numbers at <json.org>,
 // except that the decimal part is required (to distinguish from an int).
 #define DOUBLE_RAW R"re(-?(?:0|[1-9]\d*)[,.]\d+(?:[eE][+-]?\d+)?)re"
-#define DOUBLE DELIMITED(DOUBLE_RAW)
+#define DOUBLE     DELIMITED(DOUBLE_RAW)
     LexerToken::e_DOUBLE,
 #define DECIMAL64 DELIMITED("#d" DOUBLE_RAW)
     LexerToken::e_DECIMAL64,
 #define INT_RAW R"re(-?(?:0|[1-9]\d*))re"
-#define INT32 DELIMITED(INT_RAW)
+#define INT32   DELIMITED(INT_RAW)
     LexerToken::e_INT32,
 #define INT64 DELIMITED(INT_RAW "L")
     LexerToken::e_INT64,
@@ -101,10 +100,10 @@ const LexerToken::Kind k_subpatterns[] = {
 #define COMMENT_SHEBANG R"re(#![^\n]*(?:\n|$))re"
     LexerToken::e_COMMENT_SHEBANG,
 #define DATE_RAW R"re(\d\d\d\d-\d\d-\d\d)re"
-#define DATE DELIMITED(DATE_RAW)
+#define DATE     DELIMITED(DATE_RAW)
     LexerToken::e_DATE,
 #define TIME_RAW R"re(\d\d:\d\d(?::\d\d(?:[,.]\d+)?)?)re"
-#define TIME DELIMITED(TIME_RAW)
+#define TIME     DELIMITED(TIME_RAW)
     LexerToken::e_TIME,
 #define DATETIME DELIMITED(DATE_RAW "T" TIME_RAW)
     LexerToken::e_DATETIME,
@@ -123,46 +122,21 @@ const LexerToken::Kind k_subpatterns[] = {
 
 // The subpattern macros (e.g. 'STRING', 'UNQUOTE') must appear within
 // 'k_PATTERN' in the same order as defined above.
-const char k_TOKEN_PATTERN[] =
-    "(" TRUE 
-    OR FALSE 
-    OR STRING 
-    OR BYTES 
-    OR DOUBLE 
-    OR DECIMAL64 
-    OR INT32 
-    OR INT64 
-    OR WHITESPACE 
-    OR OPEN_PARENTHESIS 
-    OR CLOSE_PARENTHESIS 
-    OR OPEN_SQUARE_BRACKET 
-    OR CLOSE_SQUARE_BRACKET 
-    OR OPEN_CURLY_BRACE 
-    OR CLOSE_CURLY_BRACE 
-    OR QUOTE 
-    OR QUASIQUOTE 
-    OR UNQUOTE 
-    OR UNQUOTE_SPLICING 
-    OR SYNTAX 
-    OR QUASISYNTAX 
-    OR UNSYNTAX 
-    OR UNSYNTAX_SPLICING 
-    OR COMMENT_LINE 
-    OR COMMENT_DATUM 
-    OR COMMENT_SHEBANG 
-    OR DATE 
-    OR TIME 
-    OR DATETIME 
-    OR DATETIME_INTERVAL 
-    OR ERROR_TAG 
-    OR USER_DEFINED_TYPE_TAG
-    OR PAIR_SEPARATOR ")";
+const char k_TOKEN_PATTERN[] = "(" TRUE OR FALSE OR STRING OR BYTES OR DOUBLE
+    OR DECIMAL64 OR INT32 OR INT64 OR WHITESPACE OR OPEN_PARENTHESIS OR
+        CLOSE_PARENTHESIS OR OPEN_SQUARE_BRACKET OR CLOSE_SQUARE_BRACKET OR
+            OPEN_CURLY_BRACE OR CLOSE_CURLY_BRACE OR QUOTE OR QUASIQUOTE OR
+                UNQUOTE OR UNQUOTE_SPLICING OR SYNTAX OR QUASISYNTAX OR
+                    UNSYNTAX OR UNSYNTAX_SPLICING OR COMMENT_LINE OR
+                        COMMENT_DATUM OR COMMENT_SHEBANG OR DATE OR TIME OR
+                            DATETIME OR DATETIME_INTERVAL OR ERROR_TAG OR
+                                USER_DEFINED_TYPE_TAG OR PAIR_SEPARATOR ")";
 
 // TODO: explain
 // TODO: Comment on how not allowing ['`,] means that I'm bad at this.
 const char k_SYMBOL_PATTERN[] =
     DELIMITED_RIGHT(R"re(^[^#\s"()[\]{}'`,][^\s"()[\]{}'`,]*)re");
-    // DELIMITED_RIGHT(R"re([^#\s"()[\]{}'`,][^\s"()[\]{}'`,]*)re");
+// DELIMITED_RIGHT(R"re([^#\s"()[\]{}'`,][^\s"()[\]{}'`,]*)re");
 
 #undef DELIMITED_LEFT
 #undef DELIMITED_RIGHT
@@ -221,12 +195,12 @@ void print(const bsl::vector<bsl::pair<bsl::size_t, bsl::size_t> >& results) {
     bsl::cout << "]";
 }
 
-int prepare(bdlpcre::RegEx *regex, const char *pattern) {
+int prepare(bdlpcre::RegEx* regex, const char* pattern) {
     BSLS_ASSERT(regex);
 
-    const int flags = bdlpcre::RegEx::k_FLAG_UTF8
-                          | bdlpcre::RegEx::k_FLAG_DOTMATCHESALL
-                          | bdlpcre::RegEx::k_FLAG_JIT; 
+    const int flags = bdlpcre::RegEx::k_FLAG_UTF8 |
+                      bdlpcre::RegEx::k_FLAG_DOTMATCHESALL |
+                      bdlpcre::RegEx::k_FLAG_JIT;
     bsl::string error;
     bsl::size_t offset;
     // TODO
@@ -236,9 +210,12 @@ int prepare(bdlpcre::RegEx *regex, const char *pattern) {
     const int rc = regex->prepare(&error, &offset, pattern, flags);
     if (rc) {
         // TODO ball?
-        std::cerr << "regex error at offset " << offset << ": " << error << "\n";
-    } else {
-        // std::cout << "successfully compiled regex: " << regex->pattern() << "\n\n";
+        std::cerr << "regex error at offset " << offset << ": " << error
+                  << "\n";
+    }
+    else {
+        // std::cout << "successfully compiled regex: " << regex->pattern() <<
+        // "\n\n";
     }
 
     return rc;
@@ -252,52 +229,54 @@ bool validOffset(const bsl::pair<bsl::size_t, bsl::size_t>& match) {
     return match.first != bdlpcre::RegEx::k_INVALID_OFFSET;
 }
 
-}  // close unnamed namespace
+}  // namespace
 
-const char *LexerToken::toAscii(LexerToken::Kind kind) {
-    #define CASE(NAME) case e_##NAME: return #NAME;
+const char* LexerToken::toAscii(LexerToken::Kind kind) {
+#define CASE(NAME) \
+    case e_##NAME: \
+        return #NAME;
 
     switch (kind) {
-    CASE(EOF)
-    CASE(TRUE)
-    CASE(FALSE)
-    CASE(STRING)
-    CASE(BYTES)
-    CASE(DOUBLE)
-    CASE(DECIMAL64)
-    CASE(INT32)
-    CASE(INT64)
-    CASE(SYMBOL)
-    CASE(WHITESPACE)
-    CASE(OPEN_PARENTHESIS)
-    CASE(CLOSE_PARENTHESIS)
-    CASE(OPEN_SQUARE_BRACKET)
-    CASE(CLOSE_SQUARE_BRACKET)
-    CASE(OPEN_CURLY_BRACE)
-    CASE(CLOSE_CURLY_BRACE)
-    CASE(QUOTE)
-    CASE(QUASIQUOTE)
-    CASE(UNQUOTE)
-    CASE(UNQUOTE_SPLICING)
-    CASE(SYNTAX)
-    CASE(QUASISYNTAX)
-    CASE(UNSYNTAX)
-    CASE(UNSYNTAX_SPLICING)
-    CASE(COMMENT_LINE)
-    CASE(COMMENT_DATUM)
-    CASE(COMMENT_SHEBANG)
-    CASE(DATE)
-    CASE(TIME)
-    CASE(DATETIME)
-    CASE(DATETIME_INTERVAL)
-    CASE(ERROR_TAG)
-    CASE(USER_DEFINED_TYPE_TAG)
-    default:
-        BSLS_ASSERT(kind == e_PAIR_SEPARATOR);
-        return "PAIR_SEPARATOR";
+        CASE(EOF)
+        CASE(TRUE)
+        CASE(FALSE)
+        CASE(STRING)
+        CASE(BYTES)
+        CASE(DOUBLE)
+        CASE(DECIMAL64)
+        CASE(INT32)
+        CASE(INT64)
+        CASE(SYMBOL)
+        CASE(WHITESPACE)
+        CASE(OPEN_PARENTHESIS)
+        CASE(CLOSE_PARENTHESIS)
+        CASE(OPEN_SQUARE_BRACKET)
+        CASE(CLOSE_SQUARE_BRACKET)
+        CASE(OPEN_CURLY_BRACE)
+        CASE(CLOSE_CURLY_BRACE)
+        CASE(QUOTE)
+        CASE(QUASIQUOTE)
+        CASE(UNQUOTE)
+        CASE(UNQUOTE_SPLICING)
+        CASE(SYNTAX)
+        CASE(QUASISYNTAX)
+        CASE(UNSYNTAX)
+        CASE(UNSYNTAX_SPLICING)
+        CASE(COMMENT_LINE)
+        CASE(COMMENT_DATUM)
+        CASE(COMMENT_SHEBANG)
+        CASE(DATE)
+        CASE(TIME)
+        CASE(DATETIME)
+        CASE(DATETIME_INTERVAL)
+        CASE(ERROR_TAG)
+        CASE(USER_DEFINED_TYPE_TAG)
+        default:
+            BSLS_ASSERT(kind == e_PAIR_SEPARATOR);
+            return "PAIR_SEPARATOR";
     }
 
-    #undef CASE
+#undef CASE
 }
 
 bsl::ostream& operator<<(bsl::ostream& stream, const LexerToken& token) {
@@ -305,8 +284,8 @@ bsl::ostream& operator<<(bsl::ostream& stream, const LexerToken& token) {
     // where the text is JSON quoted
 
     stream << "<" << token.beginLine << ":" << token.beginColumn << " "
-        << LexerToken::toAscii(token.kind) << " ";
-    
+           << LexerToken::toAscii(token.kind) << " ";
+
     // 'printString' returns a nonzero value when the string is not valid
     // UTF-8. That case I ignore.
     baljsn::PrintUtil::printString(stream, token.text);
@@ -314,7 +293,7 @@ bsl::ostream& operator<<(bsl::ostream& stream, const LexerToken& token) {
     return stream << ">";
 }
 
-Lexer::Lexer(bslma::Allocator *allocator)
+Lexer::Lexer(bslma::Allocator* allocator)
 : d_results(allocator)
 , d_tokenRegex(allocator)
 , d_symbolRegex(allocator) {
@@ -334,13 +313,13 @@ int Lexer::reset(bsl::string_view subject) {
     }
 
     d_subject = subject;
-    d_offset = 0;
+    d_offset  = 0;
     d_position.reset(subject);
-    d_extra.kind = LexerToken::Kind(-1); // -1 for "not in use"
+    d_extra.kind = LexerToken::Kind(-1);  // -1 for "not in use"
     return 0;
 }
 
-int Lexer::next(LexerToken *token) {
+int Lexer::next(LexerToken* token) {
     BSLS_ASSERT(token);
     BSLS_ASSERT(d_tokenRegex.isPrepared());
     BSLS_ASSERT(d_symbolRegex.isPrepared());
@@ -364,11 +343,11 @@ int Lexer::next(LexerToken *token) {
         // The match succeeded, so the subpattern's .offset and .kind are going
         // to be important, either now or later. Store info in 'd_extra' for
         // now.
-        BSLS_ASSERT(d_results.size() == bdlb::ArrayUtil::size(k_subpatterns) + 1);
-        
-        d_extra.text = bsl::string_view(
-            d_subject.data() + d_results[0].first,
-            d_results[0].second);
+        BSLS_ASSERT(d_results.size() ==
+                    bdlb::ArrayUtil::size(k_subpatterns) + 1);
+
+        d_extra.text = bsl::string_view(d_subject.data() + d_results[0].first,
+                                        d_results[0].second);
 
         d_extra.offset = d_results[0].first;
 
@@ -379,25 +358,25 @@ int Lexer::next(LexerToken *token) {
 
         d_extra.kind = k_subpatterns[found - (d_results.begin() + 1)];
         // line and column information will be filled in later
-    } else {
+    }
+    else {
         debug << "The token regex match didn't succeed.\n";
         // The match didn't succeed, so either we'll fail entirely, or will
         // next emit an EOF. Store info in 'd_extra' for now.
-        d_extra.text = bsl::string_view();
+        d_extra.text   = bsl::string_view();
         d_extra.offset = d_subject.size();
-        d_extra.kind = LexerToken::e_EOF;
+        d_extra.kind   = LexerToken::e_EOF;
         // line and column information will be filled in later
     }
 
-    debug << "d_extra: text=" << d_extra.text << " offset="
-        << d_extra.offset << " kind=" << LexerToken::toAscii(d_extra.kind)
-        << "\n"; 
+    debug << "d_extra: text=" << d_extra.text << " offset=" << d_extra.offset
+          << " kind=" << LexerToken::toAscii(d_extra.kind) << "\n";
 
     // If the matching (or non-matching) offset is where we ended up last time,
     // then there's no gap, and we can emit the token that we just scanned.
     if (d_extra.offset == d_offset) {
         debug << "yessir, about to deliver token directly\n";
-        d_extra.beginLine = d_position.line();
+        d_extra.beginLine   = d_position.line();
         d_extra.beginColumn = d_position.column();
 
         debug << "offset before: " << d_offset << "\n";
@@ -405,24 +384,25 @@ int Lexer::next(LexerToken *token) {
         debug << "offset after: " << d_offset << "\n";
         d_position.advanceToOffset(d_subject, d_offset);
 
-        d_extra.endLine = d_position.line();
+        d_extra.endLine   = d_position.line();
         d_extra.endColumn = d_position.column();
 
-        *token = d_extra;
+        *token       = d_extra;
         d_extra.kind = LexerToken::Kind(-1);
         return 0;
     }
 
     // The offset is beyond where we started. Either we'll scan a symbol
     // spanning the gap exactly, or the input (subject) is invalid.
-    const bsl::size_t gapSize = d_extra.offset - d_offset;
+    const bsl::size_t                   gapSize = d_extra.offset - d_offset;
     bsl::pair<bsl::size_t, bsl::size_t> result;
     debug << "trying symbol: d_offset=" << d_offset << "\n";
-    // rc = d_symbolRegex.match(&result, d_subject.data(), d_subject.size(), d_offset);
-    rc = d_symbolRegex.match(&result, d_subject.data() + d_offset, d_subject.size() - d_offset);
+    rc = d_symbolRegex.match(
+        &result, d_subject.data() + d_offset, d_subject.size() - d_offset);
     if (rc || !(result.first == 0 && result.second == gapSize)) {
-        debug << "matching symbol? (note different basis) rc=" << rc << " first=" << result.first
-            << " second=" << result.second << "\n";
+        debug << "matching symbol? (note different basis) rc=" << rc
+              << " first=" << result.first << " second=" << result.second
+              << "\n";
         // Either we didn't find a symbol in the gap, or it didn't fill the
         // entire gap. Either way, that's invalid input.
         d_extra.kind = LexerToken::Kind(-1);
@@ -432,11 +412,11 @@ int Lexer::next(LexerToken *token) {
     // A symbol fits in the gap. Calculate the begin/end line/column for the
     // symbol token and emit it. Then calculate the begin/end line/column
     // for the extra token and keep it for the next call to 'next'.
-    token->text = bsl::string_view(d_subject.data() + d_offset, gapSize);
+    token->text   = bsl::string_view(d_subject.data() + d_offset, gapSize);
     token->offset = d_offset;
-    token->kind = LexerToken::e_SYMBOL;
+    token->kind   = LexerToken::e_SYMBOL;
 
-    token->beginLine = d_position.line();
+    token->beginLine   = d_position.line();
     token->beginColumn = d_position.column();
 
     d_offset += gapSize;
@@ -448,10 +428,10 @@ int Lexer::next(LexerToken *token) {
     d_offset += d_extra.text.size();
     d_position.advanceToOffset(d_subject, d_offset);
 
-    d_extra.endLine = d_position.line();
+    d_extra.endLine   = d_position.line();
     d_extra.endColumn = d_position.column();
 
     return 0;
 }
 
-}  // close namespace lspcore
+}  // namespace lspcore

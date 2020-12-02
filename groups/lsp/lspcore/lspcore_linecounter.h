@@ -13,11 +13,11 @@ class LineCounter {
     bsl::size_t d_column;
 
   public:
+    // TODO peens peens peens peens
     void reset(bsl::string_view string);
-        // TODO peens peens peens peens
 
+    // TODO peens peens peens peens
     void advanceToOffset(bsl::string_view string, bsl::size_t absoluteOffset);
-        // TODO peens peens peens peens
 
     bsl::size_t offset();
     bsl::size_t line();
@@ -36,6 +36,6 @@ inline bsl::size_t LineCounter::column() {
     return d_column;
 }
 
-}  // close namespace lspcore
+}  // namespace lspcore
 
 #endif
