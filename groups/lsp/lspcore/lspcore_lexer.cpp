@@ -53,10 +53,10 @@ const LexerToken::Kind k_subpatterns[] = {
 // Restriction to allowed numeric values will happen in the parser.
 // This pattern is based on the railroad diagram for numbers at <json.org>,
 // except that the decimal part is required (to distinguish from an int).
-#define DOUBLE_RAW R"re(-?(?:0|[1-9]\d*)[,.]\d+(?:[eE][+-]?\d+)?)re"
-#define DOUBLE     DELIMITED(DOUBLE_RAW)
+#define DECIMAL_RAW R"re(-?(?:0|[1-9]\d*)[,.]\d+(?:[eE][+-]?\d+)?)re"
+#define DOUBLE      DELIMITED(DECIMAL_RAW "B")
     LexerToken::e_DOUBLE,
-#define DECIMAL64 DELIMITED("#d" DOUBLE_RAW)
+#define DECIMAL64 DELIMITED(DECIMAL_RAW)
     LexerToken::e_DECIMAL64,
 #define INT_RAW R"re(-?(?:0|[1-9]\d*))re"
 #define INT32   DELIMITED(INT_RAW)
@@ -146,7 +146,7 @@ const char k_SYMBOL_PATTERN[] =
 #undef FALSE
 #undef STRING
 #undef BYTES
-#undef DOUBLE_RAW
+#undef DECIMAL_RAW
 #undef DOUBLE
 #undef DECIMAL64
 #undef INT_RAW
