@@ -1,3 +1,4 @@
+#include <bdlb_variant.h>
 #include <bdld_datum.h>
 #include <bsl_cstddef.h>
 #include <bsl_iostream.h>
@@ -10,13 +11,44 @@
 #include <lspcore_lexer.h>
 #include <lspcore_linecounter.h>
 #include <lspcore_listutil.h>
+#include <lspcore_parser.h>
 #include <lspcore_printutil.h>
 #include <lspcore_symbolutil.h>
 
 namespace {
 
+namespace bdlb  = BloombergLP::bdlb;
 namespace bdld  = BloombergLP::bdld;
 namespace bslma = BloombergLP::bslma;
+
+int regurgitator() {
+    lspcore::Lexer    lexer;
+    bsl::string       subject;
+    const int         typeOffset = 0;
+    bslma::Allocator* allocator  = bslma::Default::allocator();
+    lspcore::Parser   parser(lexer, typeOffset, allocator);
+
+    bdlb::Variant2<bdld::Datum, lspcore::ParserError> result;
+    while (bsl::getline(bsl::cin, subject)) {
+        int rc = lexer.reset(subject);
+        BSLS_ASSERT_OPT(rc == 0);
+
+        result = parser.parse();
+        if (result.is<bdld::Datum>()) {
+            const bdld::Datum& datum = result.the<bdld::Datum>();
+            bsl::cout << datum << "\n";
+            lspcore::PrintUtil::print(bsl::cout, datum, typeOffset);
+        }
+        else {
+            const lspcore::ParserError& error =
+                result.the<lspcore::ParserError>();
+            bsl::cout << "Error: " << error.what << "\ntoken: " << error.where;
+        }
+        bsl::cout << "\n\n";
+    }
+
+    return 0;
+}
 
 int lister() {
     lspcore::Lexer     lexer;
@@ -129,6 +161,9 @@ int main(int argc, char* argv[]) {
     }
     else if (which == "lister") {
         return lister();
+    }
+    else if (which == "regurgitator") {
+        return regurgitator();
     }
 
     BSLS_ASSERT_OPT(which == "counter");

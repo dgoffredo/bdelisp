@@ -9,6 +9,7 @@
 #include <bdlt_date.h>
 #include <bdlt_datetime.h>
 #include <bdlt_datetimeinterval.h>
+#include <bdlt_intervalconversionutil.h>
 #include <bdlt_iso8601util.h>
 #include <bdlt_time.h>
 #include <bsl_ostream.h>
@@ -70,7 +71,10 @@ void PrintVisitor::operator()(const bdlt::Datetime& value) {
 }
 
 void PrintVisitor::operator()(const bdlt::DatetimeInterval& value) {
-    baljsn::PrintUtil::printValue(stream, value);
+    // datetime intervals are prefixed by a "#" in this lisp
+    stream << "#";
+    bdlt::Iso8601Util::generate(
+        stream, bdlt::IntervalConversionUtil::convertToTimeInterval(value));
 }
 
 void PrintVisitor::operator()(const bdlt::Time& value) {

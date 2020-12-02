@@ -9,6 +9,7 @@ add_library(lsp
     lspcore/lspcore_linecounter.cpp
     lspcore/lspcore_listutil.cpp
     lspcore/lspcore_pair.cpp
+    lspcore/lspcore_parser.cpp
     lspcore/lspcore_printutil.cpp
     lspcore/lspcore_symbolutil.cpp
     lspcore/lspcore_userdefinedtypes.cpp

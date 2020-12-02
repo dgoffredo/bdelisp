@@ -36,7 +36,9 @@ struct ListUtil {
     // The behavior is undefined unless 'elements.size() >= 2'.
     // 'bdld::DatumUdt' objects created by this function will have their
     // '.type' incremented by the specified 'typeOffset'. Use the specified
-    // 'allocator' to supply memory.
+    // 'allocator' to supply memory. Note that even though this function is
+    // called 'createImproperList', the resulting 'Pair' might still be a
+    // proper list, iff the final element in 'elements' is a list.
     static bdld::Datum createImproperList(
         const bsl::vector<bdld::Datum>& elements,
         int                             typeOffset,

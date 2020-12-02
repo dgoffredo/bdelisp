@@ -23,10 +23,10 @@ bsl::ostream debug(0);  // no debug output
 // "(42)" or in "'('42[x])" is still a valid integer token. What is needed is
 // to distinguish a pattern as "delimited" by constraining what may precede and
 // follow it.
-#define DELIMITED_LEFT(PATTERN)                                           \
-    /* allowed preceding character (lookbehind) */                        \
-    /* (either beginning of string, or an allowed character) */           \
-    R"re((?:(?<=^)|(?<=[\s[\](){}",'`@!])))re" /* the original pattern */ \
+#define DELIMITED_LEFT(PATTERN)                                            \
+    /* allowed preceding character (lookbehind) */                         \
+    /* (either beginning of string, or an allowed character) */            \
+    R"re((?:(?<=^)|(?<=[\s[\](){}",'`@!;])))re" /* the original pattern */ \
         PATTERN
 
 #define DELIMITED_RIGHT(PATTERN)                          \
@@ -222,6 +222,7 @@ const char* LexerToken::toAscii(LexerToken::Kind kind) {
         return #NAME;
 
     switch (kind) {
+        CASE(INVALID)
         CASE(EOF)
         CASE(TRUE)
         CASE(FALSE)
@@ -262,6 +263,16 @@ const char* LexerToken::toAscii(LexerToken::Kind kind) {
     }
 
 #undef CASE
+}
+
+LexerToken::LexerToken()
+: kind()
+, text()
+, offset()
+, beginLine()
+, beginColumn()
+, endLine()
+, endColumn() {
 }
 
 bsl::ostream& operator<<(bsl::ostream& stream, const LexerToken& token) {

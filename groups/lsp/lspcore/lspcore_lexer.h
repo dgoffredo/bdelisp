@@ -26,6 +26,7 @@ struct LexerToken {
     // position in the input.
 
     enum Kind {
+        e_INVALID,  // the "not a token" token
         e_WHITESPACE,
         e_EOF,
         e_TRUE,
@@ -81,6 +82,8 @@ struct LexerToken {
     bsl::size_t beginColumn;
     bsl::size_t endLine;
     bsl::size_t endColumn;
+
+    LexerToken();
 };
 
 // Insert the specified 'token' into the specified 'stream'. Return a
