@@ -1,6 +1,6 @@
 #include <baljsn_printutil.h>
 #include <bdlb_arrayutil.h>
-#include <bsl_iostream.h>  // TODO: no
+#include <bsl_ostream.h>
 #include <bsls_assert.h>
 #include <lspcore_lexer.h>
 
@@ -8,13 +8,6 @@ using namespace BloombergLP;
 
 namespace lspcore {
 namespace {
-
-// TODO: hack hack
-// bsl::ostream debug(bsl::cerr.rdbuf()); // with debug output
-bsl::ostream debug(0);  // no debug output
-
-// TODO: comment about how all of the subpatterns must avoid capturing
-// subgroups.
 
 // In order to distinguish individual tokens from their concatenations, we need
 // to surround certain patterns with lookbehinds and lookaheads. For example,
@@ -37,7 +30,14 @@ bsl::ostream debug(0);  // no debug output
 
 #define DELIMITED(PATTERN) DELIMITED_RIGHT(DELIMITED_LEFT(PATTERN))
 
-// 'k_subpatterns' TODO document
+// The regular expression pattern used to match tokens is an alternation among
+// various subpatterns, one for each type of token. Each subpattern must _not_
+// capture any subgroups.
+//
+// 'k_subpatterns' maps subpattern index to token type (kind), except that it's
+// offset by one so that the first subpattern is at index zero, instead of the
+// entire match being at index zero. See its use in 'Lexer::next' for more
+// information.
 const LexerToken::Kind k_subpatterns[] = {
 #define TRUE DELIMITED(R"re(#t(?:rue)?)re")
     LexerToken::e_TRUE,
@@ -130,11 +130,15 @@ const char k_TOKEN_PATTERN[] = "(" TRUE OR FALSE OR STRING OR BYTES OR DOUBLE
                             DATETIME OR DATETIME_INTERVAL OR ERROR_TAG OR
                                 USER_DEFINED_TYPE_TAG OR PAIR_SEPARATOR ")";
 
-// TODO: explain
-// TODO: Comment on how not allowing ['`,] means that I'm bad at this.
+// Symbols are special. Rather than being one of the alternatives in the
+// 'k_TOKEN_PATTERN', the symbol pattern is instead a fallback. The logic is
+// "if k_TOKEN_PATTERN" doesn't match a section of the input, and that section
+// exactly matches k_SYMBOL_PATTERN, then that section is a token."
+//
+// This allows the symbol pattern to be permissive without having to clutter
+// the token subpatterns for even more exceptions.
 const char k_SYMBOL_PATTERN[] =
     DELIMITED_RIGHT(R"re(^[^#\s"()[\]{}'`,][^\s"()[\]{}'`,]*)re");
-// DELIMITED_RIGHT(R"re([^#\s"()[\]{}'`,][^\s"()[\]{}'`,]*)re");
 
 #undef DELIMITED_LEFT
 #undef DELIMITED_RIGHT
@@ -188,22 +192,10 @@ int prepare(bdlpcre::RegEx* regex, const char* pattern) {
                       bdlpcre::RegEx::k_FLAG_JIT;
     bsl::string error;
     bsl::size_t offset;
-    // TODO
-    // I'm happy to assume that the pattern is correct, but I wonder if this
-    // can fail due to resource exhaustion. That's why I have error handling,
-    // but I'm not decided on how best to do it.
-    const int rc = regex->prepare(&error, &offset, pattern, flags);
-    if (rc) {
-        // TODO ball?
-        std::cerr << "regex error at offset " << offset << ": " << error
-                  << "\n";
-    }
-    else {
-        // std::cout << "successfully compiled regex: " << regex->pattern() <<
-        // "\n\n";
-    }
 
-    return rc;
+    // I'm happy to assume that the pattern is correct, but I wonder if this
+    // can fail due to resource exhaustion. That's why I have error handling.
+    return regex->prepare(&error, &offset, pattern, flags);
 }
 
 // Oh C++03...
@@ -311,7 +303,7 @@ int Lexer::reset(bsl::string_view subject) {
     d_subject = subject;
     d_offset  = 0;
     d_position.reset(subject);
-    d_extra.kind = LexerToken::Kind(-1);  // -1 for "not in use"
+    d_extra.kind = LexerToken::e_INVALID;  // "not in use"
     return 0;
 }
 
@@ -321,12 +313,12 @@ int Lexer::next(LexerToken* token) {
     BSLS_ASSERT(d_symbolRegex.isPrepared());
 
     // already have one ready from previous call to 'next'
-    if (d_extra.kind != LexerToken::Kind(-1)) {
+    if (d_extra.kind != LexerToken::e_INVALID) {
         *token = d_extra;
 
         // un-extra the token, unless it's EOF. EOF we'll keep giving.
         if (d_extra.kind != LexerToken::e_EOF) {
-            d_extra.kind = LexerToken::Kind(-1);
+            d_extra.kind = LexerToken::e_INVALID;
         }
 
         return 0;
@@ -335,7 +327,6 @@ int Lexer::next(LexerToken* token) {
     int rc = d_tokenRegex.match(
         &d_results, d_subject.data(), d_subject.size(), d_offset);
     if (rc == 0) {
-        debug << "The token regex match succeeded.\n";
         // The match succeeded, so the subpattern's .offset and .kind are going
         // to be important, either now or later. Store info in 'd_extra' for
         // now.
@@ -356,7 +347,6 @@ int Lexer::next(LexerToken* token) {
         // line and column information will be filled in later
     }
     else {
-        debug << "The token regex match didn't succeed.\n";
         // The match didn't succeed, so either we'll fail entirely, or will
         // next emit an EOF. Store info in 'd_extra' for now.
         d_extra.text   = bsl::string_view();
@@ -365,26 +355,20 @@ int Lexer::next(LexerToken* token) {
         // line and column information will be filled in later
     }
 
-    debug << "d_extra: text=" << d_extra.text << " offset=" << d_extra.offset
-          << " kind=" << LexerToken::toAscii(d_extra.kind) << "\n";
-
     // If the matching (or non-matching) offset is where we ended up last time,
     // then there's no gap, and we can emit the token that we just scanned.
     if (d_extra.offset == d_offset) {
-        debug << "yessir, about to deliver token directly\n";
         d_extra.beginLine   = d_position.line();
         d_extra.beginColumn = d_position.column();
 
-        debug << "offset before: " << d_offset << "\n";
         d_offset += d_extra.text.size();
-        debug << "offset after: " << d_offset << "\n";
         d_position.advanceToOffset(d_subject, d_offset);
 
         d_extra.endLine   = d_position.line();
         d_extra.endColumn = d_position.column();
 
         *token       = d_extra;
-        d_extra.kind = LexerToken::Kind(-1);
+        d_extra.kind = LexerToken::e_INVALID;
         return 0;
     }
 
@@ -392,16 +376,12 @@ int Lexer::next(LexerToken* token) {
     // spanning the gap exactly, or the input (subject) is invalid.
     const bsl::size_t                   gapSize = d_extra.offset - d_offset;
     bsl::pair<bsl::size_t, bsl::size_t> result;
-    debug << "trying symbol: d_offset=" << d_offset << "\n";
     rc = d_symbolRegex.match(
         &result, d_subject.data() + d_offset, d_subject.size() - d_offset);
     if (rc || !(result.first == 0 && result.second == gapSize)) {
-        debug << "matching symbol? (note different basis) rc=" << rc
-              << " first=" << result.first << " second=" << result.second
-              << "\n";
         // Either we didn't find a symbol in the gap, or it didn't fill the
         // entire gap. Either way, that's invalid input.
-        d_extra.kind = LexerToken::Kind(-1);
+        d_extra.kind = LexerToken::e_INVALID;
         return 1;
     }
 
