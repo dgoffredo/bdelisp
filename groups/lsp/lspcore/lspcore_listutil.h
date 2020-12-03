@@ -26,6 +26,10 @@ struct ListUtil {
     static bdld::Datum createList(const bsl::vector<bdld::Datum>& elements,
                                   int                             typeOffset,
                                   bslma::Allocator*               allocator);
+    static bdld::Datum createList(const bdld::Datum* begin,
+                                  const bdld::Datum* end,
+                                  int                typeOffset,
+                                  bslma::Allocator*  allocator);
 
     // Return a 'Pair' that is the head of an improper list containing the
     // specified 'elements'. An improper list is one whose final 'Pair::second'
@@ -43,7 +47,26 @@ struct ListUtil {
         const bsl::vector<bdld::Datum>& elements,
         int                             typeOffset,
         bslma::Allocator*               allocator);
+    static bdld::Datum createImproperList(const bdld::Datum* begin,
+                                          const bdld::Datum* end,
+                                          int                typeOffset,
+                                          bslma::Allocator*  allocator);
 };
+
+inline bdld::Datum ListUtil::createList(
+    const bsl::vector<bdld::Datum>& elements,
+    int                             typeOffset,
+    bslma::Allocator*               allocator) {
+    return createList(elements.begin(), elements.end(), typeOffset, allocator);
+}
+
+inline bdld::Datum ListUtil::createImproperList(
+    const bsl::vector<bdld::Datum>& elements,
+    int                             typeOffset,
+    bslma::Allocator*               allocator) {
+    return createImproperList(
+        elements.begin(), elements.end(), typeOffset, allocator);
+}
 
 }  // namespace lspcore
 

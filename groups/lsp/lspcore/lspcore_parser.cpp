@@ -1,4 +1,5 @@
 #include <baljsn_parserutil.h>
+#include <bdlb_arrayutil.h>
 #include <bdld_datumarraybuilder.h>
 #include <bdldfp_decimal.h>
 #include <bdlt_date.h>
@@ -81,6 +82,8 @@ DEFINE_PARSER_ERROR(
     "user-defined type literal type code falls in a range that is reserved "
     "for use by this library. The interpreter's configured type offset may be "
     "adjusted to accomodate this user-defined type.");
+DEFINE_PARSER_ERROR(UnterminatedQuoteLike,
+                    "Quote-like token must be followed by a datum.");
 
 #undef DEFINE_PARSER_ERROR
 
@@ -92,6 +95,28 @@ bool shouldIgnore(const LexerToken& token) {
             return true;
         default:
             return false;
+    }
+}
+
+bsl::string_view quoteLikeName(LexerToken::Kind kind) {
+    switch (kind) {
+        case LexerToken::e_QUOTE:
+            return "quote";
+        case LexerToken::e_QUASIQUOTE:
+            return "quasiquote";
+        case LexerToken::e_UNQUOTE:
+            return "unquote";
+        case LexerToken::e_UNQUOTE_SPLICING:
+            return "unquote-splicing";
+        case LexerToken::e_SYNTAX:
+            return "syntax";
+        case LexerToken::e_QUASISYNTAX:
+            return "quasisyntax";
+        case LexerToken::e_UNSYNTAX:
+            return "unsyntax";
+        default:
+            BSLS_ASSERT_OPT(kind == LexerToken::e_UNSYNTAX_SPLICING);
+            return "unsyntax-splicing";
     }
 }
 
@@ -364,8 +389,53 @@ bdld::Datum Parser::parseMap(const LexerToken&) {
     return bdld::Datum::createNull(); /*TODO*/
 }
 
-bdld::Datum Parser::parseQuoteLike(const LexerToken&) {
-    return bdld::Datum::createNull(); /*TODO*/
+bdld::Datum Parser::parseQuoteLike(const LexerToken& token) {
+    // A quote-like form is one preceded by special punctuation, like a single
+    // quote (hence the name "quote-like"). Here are some examples where the
+    // list "(foo bar)" is made quote-like by adding a preceding token:
+    //
+    //     '(foo bar)
+    //     `(foo bar)
+    //     ,(foo bar)
+    //     ,@(foo bar)
+    //     #'(foo bar)
+    //     #`(foo bar)
+    //     #,(foo bar)
+    //
+    // It's not just lists, either, it can be any datum.
+    //
+    // Each of these quote-like syntaxes is a shorthand for a corresponding
+    // special form, e.g.
+    //
+    //     '(foo bar)
+    //
+    // means
+    //
+    //     (quote (foo bar))
+    //
+    // The parser thus aways produces a two-element list whose first element is
+    // a hard-coded symbol and whose second element is the datum following the
+    // quote-like token.
+
+    bdld::Datum  data[2];
+    bdld::Datum& symbol   = data[0];
+    bdld::Datum& argument = data[1];
+
+    try {
+        argument = parseDatum();
+    }
+    catch (const EofError&) {
+        throw UnterminatedQuoteLike(token);
+    }
+    catch (const NotAValue&) {
+        throw UnterminatedQuoteLike(token);
+    }
+
+    symbol = SymbolUtil::create(
+        quoteLikeName(token.kind), d_typeOffset, d_datumAllocator_p);
+
+    return ListUtil::createList(
+        data, bdlb::ArrayUtil::end(data), d_typeOffset, d_datumAllocator_p);
 }
 
 bdld::Datum Parser::parseComment(const LexerToken& token) {
