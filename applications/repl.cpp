@@ -21,6 +21,36 @@ namespace bdlb  = BloombergLP::bdlb;
 namespace bdld  = BloombergLP::bdld;
 namespace bslma = BloombergLP::bslma;
 
+int regurgitate() {
+    lspcore::Lexer    lexer;
+    bsl::string       subject;
+    const int         typeOffset = 0;
+    bslma::Allocator* allocator  = bslma::Default::allocator();
+    lspcore::Parser   parser(lexer, typeOffset, allocator);
+    bdlb::Variant2<bdld::Datum, lspcore::ParserError> result;
+
+    bsl::ostringstream input;
+    input << bsl::cin.rdbuf();
+    subject = input.str();
+
+    const int rc = lexer.reset(subject);
+    BSLS_ASSERT_OPT(rc == 0);
+
+    result = parser.parse();
+    if (result.is<bdld::Datum>()) {
+        const bdld::Datum& datum = result.the<bdld::Datum>();
+        bsl::cout << datum << "\n";
+        lspcore::PrintUtil::print(bsl::cout, datum, typeOffset);
+    }
+    else {
+        const lspcore::ParserError& error = result.the<lspcore::ParserError>();
+        bsl::cout << "Error: " << error.what << "\ntoken: " << error.where;
+    }
+    bsl::cout << "\n\n";
+
+    return 0;
+}
+
 int regurgitator() {
     lspcore::Lexer    lexer;
     bsl::string       subject;
@@ -164,6 +194,9 @@ int main(int argc, char* argv[]) {
     }
     else if (which == "regurgitator") {
         return regurgitator();
+    }
+    else if (which == "regurgitate") {
+        return regurgitate();
     }
 
     BSLS_ASSERT_OPT(which == "counter");
