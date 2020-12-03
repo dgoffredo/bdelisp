@@ -18,90 +18,54 @@ using namespace BloombergLP;
 namespace lspcore {
 namespace {
 
-struct EofError : public ParserError {
-    EofError(const LexerToken& where)
-    : ParserError("encountered the end of input before parsing any value",
-                  where) {
+#define DEFINE_PARSER_ERROR(NAME, MESSAGE)     \
+    struct NAME : public ParserError {         \
+        explicit NAME(const LexerToken& where) \
+        : ParserError(MESSAGE, where) {        \
+        }                                      \
     }
-};
 
-struct BadToken : public ParserError {
-    BadToken(const LexerToken& where)
-    : ParserError(where.kind == LexerToken::e_INVALID
-                      ? "unable to parse a token at the beginning of input"
-                      : "unable to parse a token after the following token",
-                  where) {
-    }
-};
+DEFINE_PARSER_ERROR(EofError,
+                    "encountered the end of input before parsing any value");
+DEFINE_PARSER_ERROR(
+    BadToken,
+    (where.kind == LexerToken::e_INVALID
+         ? "unable to parse a token at the beginning of input"
+         : "unable to parse a token after the following token"));
+DEFINE_PARSER_ERROR(NotAValue, "no value begins with this token");
+DEFINE_PARSER_ERROR(InvalidString,
+                    "unable to parse string literal as extended JSON");
+DEFINE_PARSER_ERROR(InvalidNumber, "unable to parse numeric literal as JSON");
+DEFINE_PARSER_ERROR(
+    InvalidBase64,
+    "unable to parse binary data from base-64 encoded JSON string literal");
+DEFINE_PARSER_ERROR(InvalidTemporal,
+                    "unable to parse date/time/period from literal");
+DEFINE_PARSER_ERROR(IncompleteComment,
+                    "encountered a datum commen (i.e. #;...) without a "
+                    "complete datum (the \"...\" part)");
+DEFINE_PARSER_ERROR(
+    IncompleteArray,
+    "input ended before the array that starts here was closed");
+DEFINE_PARSER_ERROR(
+    IncompleteList,
+    "input ended before the list/pair that starts here was closed");
+DEFINE_PARSER_ERROR(
+    IncompletePair,
+    "input ended before the pair whose middle is here was closed");
+DEFINE_PARSER_ERROR(PairSuffix,
+                    "extra data found after second element of pair");
+DEFINE_PARSER_ERROR(ErrorIncomplete,
+                    "unterminated #error: must be followed by an array");
+DEFINE_PARSER_ERROR(ErrorNotArray, "#error must be followed by an array");
+DEFINE_PARSER_ERROR(ErrorWrongLength,
+                    "#error array must have one or two elements");
+DEFINE_PARSER_ERROR(ErrorCodeMustBeInteger,
+                    "#error code (first element) must be a 32-bit integer");
+DEFINE_PARSER_ERROR(ErrorMessageMustBeString,
+                    "# error message (second element) must be a string");
 
-struct NotAValue : public ParserError {
-    NotAValue(const LexerToken& where)
-    : ParserError("no value begins with this token", where) {
-    }
-};
-
-struct InvalidString : public ParserError {
-    InvalidString(const LexerToken& where)
-    : ParserError("unable to parse string literal as extended JSON", where) {
-    }
-};
-
-struct InvalidNumber : public ParserError {
-    InvalidNumber(const LexerToken& where)
-    : ParserError("unable to parse numeric literal as JSON", where) {
-    }
-};
-
-struct InvalidBase64 : public ParserError {
-    InvalidBase64(const LexerToken& where)
-    : ParserError("unable to parse binary data from base-64 encoded JSON "
-                  "string literal",
-                  where) {
-    }
-};
-
-struct InvalidTemporal : public ParserError {
-    InvalidTemporal(const LexerToken& where)
-    : ParserError("unable to parse date/time/period from literal", where) {
-    }
-};
-
-struct IncompleteComment : public ParserError {
-    IncompleteComment(const LexerToken& where)
-    : ParserError("encountered a datum commen (i.e. #;...) without a complete "
-                  "datum (the \"...\" part)",
-                  where) {
-    }
-};
-
-struct IncompleteArray : public ParserError {
-    IncompleteArray(const LexerToken& where)
-    : ParserError("input ended before the array that starts here was closed",
-                  where) {
-    }
-};
-
-struct IncompleteList : public ParserError {
-    IncompleteList(const LexerToken& where)
-    : ParserError(
-          "input ended before the list/pair that starts here was closed",
-          where) {
-    }
-};
-
-struct IncompletePair : public ParserError {
-    IncompletePair(const LexerToken& where)
-    : ParserError(
-          "input ended before the pair whose middle is here was closed",
-          where) {
-    }
-};
-
-struct PairSuffix : public ParserError {
-    PairSuffix(const LexerToken& where)
-    : ParserError("extra data found after second element of pair", where) {
-    }
-};
+#undef DEFINE_PARSER_ERROR
 
 bool shouldIgnore(const LexerToken& token) {
     switch (token.kind) {
@@ -460,7 +424,7 @@ bdld::Datum Parser::parseDatetimeInterval(const LexerToken& token) {
         d_datumAllocator_p);
 }
 
-bdld::Datum Parser::parseError(const LexerToken&) {
+bdld::Datum Parser::parseError(const LexerToken& token) {
     // An error is represented as an error tag ("#error") followed by an
     // array containing either one or two elements. The first element is
     // always the integer code of the error. The optional second element
@@ -470,7 +434,40 @@ bdld::Datum Parser::parseError(const LexerToken&) {
     //     #error[10]
     //     #error[10 "this is serious, guys!"]
 
-    return bdld::Datum::createNull(); /*TODO*/
+    bdld::Datum datum;
+    try {
+        datum = parseDatum();
+    }
+    catch (const EofError&) {
+        throw ErrorIncomplete(token);
+    }
+
+    if (!datum.isArray()) {
+        throw ErrorNotArray(token);
+    }
+
+    const bdld::DatumArrayRef array = datum.theArray();
+    if (array.length() < 1 || array.length() > 2) {
+        throw ErrorWrongLength(token);
+    }
+
+    const bdld::Datum code = array[0];
+    if (!code.isInteger()) {
+        throw ErrorCodeMustBeInteger(token);
+    }
+
+    if (array.length() == 1) {
+        // There's no message, so return the error with just a code.
+        return bdld::Datum::createError(code.theInteger());
+    }
+
+    const bdld::Datum message = array[1];
+    if (!message.isString()) {
+        throw ErrorMessageMustBeString(token);
+    }
+
+    return bdld::Datum::createError(
+        code.theInteger(), message.theString(), d_datumAllocator_p);
 }
 
 bdld::Datum Parser::parseUdt(const LexerToken&) {
