@@ -124,8 +124,17 @@ void PrintVisitor::operator()(const bdld::DatumUdt& value) {
     }
 
     // Otherwise, it's some user-defined type we're not aware of. Print its
-    // type ID and its address, e.g.: #udt[23 "0x3434324"]
-    stream << "#udt[" << value.type() << "\"" << value.data() << "\"]";
+    // type ID and its address, e.g.: '#udt[23 "0x3434324"]'.
+    // 'value.data() == 0' (null) is treated specially, because I noticed that
+    // the leading "0x" was being omitted in that case.
+    stream << "#udt[" << value.type() << " \"";
+    if (value.data()) {
+        stream << value.data();
+    }
+    else {
+        stream << "0x0";
+    }
+    stream << "\"]";
 }
 
 void PrintVisitor::operator()(const bdld::DatumArrayRef& array) {

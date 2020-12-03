@@ -63,7 +63,19 @@ DEFINE_PARSER_ERROR(ErrorWrongLength,
 DEFINE_PARSER_ERROR(ErrorCodeMustBeInteger,
                     "#error code (first element) must be a 32-bit integer");
 DEFINE_PARSER_ERROR(ErrorMessageMustBeString,
-                    "# error message (second element) must be a string");
+                    "#error message (second element) must be a string");
+DEFINE_PARSER_ERROR(
+    UdtIncomplete,
+    "unterminated user-defined type (#udt): must be followed by an array");
+DEFINE_PARSER_ERROR(
+    UdtNotArray,
+    "user-defined type literal (#udt) must be followed by an array");
+DEFINE_PARSER_ERROR(
+    UdtWrongLength,
+    "user-defined type literal (#udt) must have exactly two elements");
+DEFINE_PARSER_ERROR(UdtTypeMustBeInteger,
+                    "user-defined type literal (#udt) first element, the type "
+                    "code, must be a 32-bit integer");
 
 #undef DEFINE_PARSER_ERROR
 
@@ -470,21 +482,56 @@ bdld::Datum Parser::parseError(const LexerToken& token) {
         code.theInteger(), message.theString(), d_datumAllocator_p);
 }
 
-bdld::Datum Parser::parseUdt(const LexerToken&) {
+bdld::Datum Parser::parseUdt(const LexerToken& token) {
     // A user-defined type literal is represented as a udt tag ("#udt")
     // followed by an array containing two elements. The first element is the
     // integer "type" of the user-defined type (that which distinguishes it
     // from other types of user-defined types). The second element is
-    // implementation-defined. If no lisp serialization of the type is known,
-    // then a string containing the "0x" prefixed hexadecimal address of the
-    // object in memory, e.g.
+    // implementation-defined. When printing, if no lisp serialization of the
+    // type is known, then a string containing the "0x" prefixed hexadecimal
+    // address of the object in memory, e.g.
     //
     //     #udt[42 "0xDEADBEEF"]
     //
-    // is an instance of user-defined type of type 42 and at address
+    // indicates an instance of user-defined type of type 42 and at address
     // 0xDEADBEEF.
+    //
+    // There's currently no mechanism by which user-defined type parsers can be
+    // registered with this library, so for now these types are parsed with the
+    // indicated "type" but with a "data" pointer of zero, i.e. the second
+    // element of the array is ignored. Note that this means that the parse is
+    // lossy, e.g.
+    //
+    //     #udt[42 "0xDEADBEEF"]
+    //
+    // parses as if it were
+    //
+    //     #udt[42 "0x0"]
 
-    return bdld::Datum::createNull(); /*TODO*/
+    bdld::Datum datum;
+    try {
+        datum = parseDatum();
+    }
+    catch (const EofError&) {
+        throw UdtIncomplete(token);
+    }
+
+    if (!datum.isArray()) {
+        throw UdtNotArray(token);
+    }
+
+    const bdld::DatumArrayRef array = datum.theArray();
+    if (array.length() != 2) {
+        throw UdtWrongLength(token);
+    }
+
+    const bdld::Datum type = array[0];
+    if (!type.isInteger()) {
+        throw UdtTypeMustBeInteger(token);
+    }
+    // Note that the second element of the array is (currently) ignored.
+
+    return bdld::Datum::createUdt(0, type.theInteger());
 }
 
 LexerToken Parser::next() {
