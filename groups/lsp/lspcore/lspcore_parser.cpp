@@ -76,6 +76,11 @@ DEFINE_PARSER_ERROR(
 DEFINE_PARSER_ERROR(UdtTypeMustBeInteger,
                     "user-defined type literal (#udt) first element, the type "
                     "code, must be a 32-bit integer");
+DEFINE_PARSER_ERROR(
+    UdtTypeCollidesWithReservedRange,
+    "user-defined type literal type code falls in a range that is reserved "
+    "for use by this library. The interpreter's configured type offset may be "
+    "adjusted to accomodate this user-defined type.");
 
 #undef DEFINE_PARSER_ERROR
 
@@ -507,6 +512,11 @@ bdld::Datum Parser::parseUdt(const LexerToken& token) {
     // parses as if it were
     //
     //     #udt[42 "0x0"]
+    //
+    // Some user-defined type codes are reserved by this library, subject to a
+    // configurable offset (e.g. 'd_typeOffset'). Attempts to parse
+    // user-defined types with codes conflicting with those used by this
+    // library will result in an error.
 
     bdld::Datum datum;
     try {
@@ -531,7 +541,13 @@ bdld::Datum Parser::parseUdt(const LexerToken& token) {
     }
     // Note that the second element of the array is (currently) ignored.
 
-    return bdld::Datum::createUdt(0, type.theInteger());
+    const int code = type.theInteger();
+    if (code >= d_typeOffset &&
+        code < int(d_typeOffset + UserDefinedTypes::k_COUNT)) {
+        throw UdtTypeCollidesWithReservedRange(token);
+    }
+
+    return bdld::Datum::createUdt(0, code);
 }
 
 LexerToken Parser::next() {
