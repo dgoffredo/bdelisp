@@ -20,9 +20,19 @@ namespace bdlb  = BloombergLP::bdlb;
 namespace bdld  = BloombergLP::bdld;
 namespace bslma = BloombergLP::bslma;
 
-// TODO: Currently this parser generates garbage.
-// Either clean it up, or document that it must be used
-// with a garbage collecting allocator.
+// Note:
+// 
+// This parser generates garbage. Some of it could be avoided, but not
+// all of it. The fundamental problem is that 'bdld::Datum::destroy' does not
+// know how to destroy objects referred to by user-defined types, and there is
+// no way to write an external "destroy" function without access to the
+// internals of 'bdld::Datum'.
+//
+// One way to deal with the garbage is to use two allocators: one for the
+// resulting 'bdld::Datum', and one for use by the parser. When the parser
+// returns a result, clone it using the allocator for the 'bdld::Datum', and
+// then '.release()' the parser's allocator. The 'Parser' class does not
+// provide this facility, because I don't intend to need it.
 
 struct ParserError {
     bsl::string what;
