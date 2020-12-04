@@ -8,6 +8,9 @@
 #include <bdlt_intervalconversionutil.h>
 #include <bdlt_iso8601util.h>
 #include <bdlt_time.h>
+#include <bsl_algorithm.h>
+#include <bsl_new.h>
+#include <bsl_numeric.h>
 #include <bsl_sstream.h>
 #include <bsls_timeinterval.h>
 #include <lspcore_listutil.h>
@@ -84,6 +87,23 @@ DEFINE_PARSER_ERROR(
     "adjusted to accomodate this user-defined type.");
 DEFINE_PARSER_ERROR(UnterminatedQuoteLike,
                     "Quote-like token must be followed by a datum.");
+DEFINE_PARSER_ERROR(UnterminatedMap,
+                    "dict literal (map) missing closing \"}\"");
+DEFINE_PARSER_ERROR(
+    OddMap,
+    "dict literal (map) has an odd number of elements (should be even)");
+DEFINE_PARSER_ERROR(
+    HeterogeneousMapKeys,
+    "dict literal (map) has keys of different types. Either all keys must be "
+    "strings, or all keys must be 32-bit integers");
+DEFINE_PARSER_ERROR(
+    InvalidMapKeyType,
+    "dict literal (map) keys must be either all string literals or all 32-bit "
+    "integer literals. Note: to denote a calculated dict, use the (dict ...) "
+    "procedure instead.");
+DEFINE_PARSER_ERROR(DuplicateMapKey,
+                    "dict literal beginning here has one or more duplicated "
+                    "key values. Keys must be unique.");
 
 #undef DEFINE_PARSER_ERROR
 
@@ -118,6 +138,100 @@ bsl::string_view quoteLikeName(LexerToken::Kind kind) {
             BSLS_ASSERT_OPT(kind == LexerToken::e_UNSYNTAX_SPLICING);
             return "unsyntax-splicing";
     }
+}
+
+bool differentKeyTypes(const bsl::pair<bdld::Datum, bdld::Datum>& left,
+                       const bsl::pair<bdld::Datum, bdld::Datum>& right) {
+    return left.first.type() != right.first.type();
+}
+
+struct LessByKey {
+    template <typename ITEM>
+    bool operator()(const ITEM& left, const ITEM& right) {
+        return left.key() < right.key();
+    }
+};
+
+struct EqualKeys {
+    template <typename ITEM>
+    bool operator()(const ITEM& left, const ITEM& right) {
+        return left.key() == right.key();
+    }
+};
+
+struct AddKeySize {
+    bsl::size_t operator()(bsl::size_t currentTotal,
+                           const bsl::pair<bdld::Datum, bdld::Datum>& item) {
+        BSLS_ASSERT(item.first.isString());
+        return currentTotal + item.first.theString().size();
+    }
+};
+
+bdld::Datum createStringMap(
+    const bsl::vector<bsl::pair<bdld::Datum, bdld::Datum> >& items,
+    const LexerToken&                                        openCurly,
+    bslma::Allocator*                                        allocator) {
+    const bsl::size_t keysLength = bsl::accumulate(
+        items.begin(), items.end(), bsl::size_t(0), AddKeySize());
+    const bsl::size_t n = items.size();
+
+    bdld::DatumMutableMapOwningKeysRef map;
+    bdld::Datum::createUninitializedMap(&map, n, keysLength, allocator);
+    char* currentKey = map.keys();
+
+    for (bsl::size_t i = 0; i < n; ++i) {
+        const bsl::pair<bdld::Datum, bdld::Datum>& item = items[i];
+        BSLS_ASSERT(item.first.isString());
+        const bsl::string_view key = item.first.theString();
+
+        bsl::copy(key.begin(), key.end(), currentKey);
+        map.data()[i] = bdld::DatumMapEntry(
+            bsl::string_view(currentKey, key.size()), item.second);
+
+        currentKey += key.size();
+    }
+
+    *map.size()                      = n;
+    bdld::DatumMapEntry* const begin = map.data();
+    bdld::DatumMapEntry* const end   = map.data() + n;
+
+    bsl::sort(begin, end, LessByKey());
+    if (bsl::adjacent_find(begin, end, EqualKeys()) != end) {
+        throw DuplicateMapKey(openCurly);
+    }
+
+    *map.sorted() = true;
+    return bdld::Datum::adoptMapOwningKeys(map);
+}
+
+bdld::Datum createIntMap(
+    const bsl::vector<bsl::pair<bdld::Datum, bdld::Datum> >& items,
+    const LexerToken&                                        openCurly,
+    bslma::Allocator*                                        allocator) {
+    const bsl::size_t n = items.size();
+
+    bdld::DatumMutableIntMapRef map;
+    bdld::Datum::createUninitializedIntMap(&map, n, allocator);
+
+    for (bsl::size_t i = 0; i < n; ++i) {
+        const bsl::pair<bdld::Datum, bdld::Datum>& item = items[i];
+        BSLS_ASSERT(item.first.isInteger());
+
+        map.data()[i] =
+            bdld::DatumIntMapEntry(item.first.theInteger(), item.second);
+    }
+
+    *map.size()                         = n;
+    bdld::DatumIntMapEntry* const begin = map.data();
+    bdld::DatumIntMapEntry* const end   = map.data() + n;
+
+    bsl::sort(begin, end, LessByKey());
+    if (bsl::adjacent_find(begin, end, EqualKeys()) != end) {
+        throw DuplicateMapKey(openCurly);
+    }
+
+    *map.sorted() = true;
+    return bdld::Datum::adoptIntMap(map);
 }
 
 }  // namespace
@@ -385,8 +499,90 @@ bdld::Datum Parser::parseArray(const LexerToken& token) {
     }
 }
 
-bdld::Datum Parser::parseMap(const LexerToken&) {
-    return bdld::Datum::createNull(); /*TODO*/
+bool Parser::appendMapItem(
+    bsl::vector<bsl::pair<bdld::Datum, bdld::Datum> >* items,
+    LexerToken                                         openCurly) {
+    BSLS_ASSERT(items);
+
+    bdld::Datum key;
+    try {
+        key = parseDatum();
+    }
+    catch (const EofError&) {
+        throw UnterminatedMap(openCurly);
+    }
+    catch (const NotAValue& error) {
+        if (error.where.kind == LexerToken::e_CLOSE_CURLY_BRACE) {
+            return false;  // end of map
+        }
+        throw;  // some other unexpected punctuation
+    }
+
+    bdld::Datum value;
+    try {
+        value = parseDatum();
+    }
+    catch (const EofError&) {
+        throw UnterminatedMap(openCurly);
+    }
+    catch (const NotAValue& error) {
+        if (error.where.kind == LexerToken::e_CLOSE_CURLY_BRACE) {
+            throw OddMap(openCurly);
+        }
+        throw;  // some other unexpected punctuation
+    }
+
+    items->push_back(bsl::make_pair(key, value));
+    return true;  // continue, might not be at end of map yet
+}
+
+bdld::Datum Parser::parseMap(const LexerToken& token) {
+    // A map can have either all 32-bit integer keys or all string keys, but no
+    // combination of the two. Since the datum parsed is either a (string) Map
+    // or an IntMap, we must know upfront what the types of the keys are. This
+    // means that keys cannot be calculated expressions -- they must be either
+    // integer literals or string literals.
+    //
+    // To create a map with calculated keys, users can instead use procedures
+    // that produce maps, e.g. '(dict key1 value1 key2 value2 ...)'.
+
+    // Here are the rules for parsing:
+    // - must be closed by a "}"
+    // - an empty map is null, the same as the empty list
+    // - must have an even number of elements
+    // - key value key value ... where keys are all string literals or all
+    //   integer literals
+    // - duplicates are an error
+    // - the parser will sort the entries before constructing the map
+
+    // Here's the plan:
+    // - parse the elements of the map into a sequence of 'bsl::pair' of
+    //   'Datum'
+    // - make sure that the '.first' of each pair all have the same type
+    // - make sure that '.first' is either a string or an int32
+    // - dispatch to a more specific parser depending on the key type
+
+    bsl::vector<bsl::pair<bdld::Datum, bdld::Datum> > items;
+    while (appendMapItem(&items, token))
+        ;
+
+    if (items.empty()) {
+        return bdld::Datum::createNull();  // {} == ()
+    }
+
+    if (bsl::adjacent_find(items.begin(), items.end(), differentKeyTypes) !=
+        items.end()) {
+        throw HeterogeneousMapKeys(token);
+    }
+
+    switch (items[0].first.type()) {
+        case bdld::Datum::e_INTEGER:
+            return createIntMap(items, token, d_datumAllocator_p);
+        case bdld::Datum::e_STRING:
+            return createStringMap(items, token, d_datumAllocator_p);
+        default:
+            throw InvalidMapKeyType(token);
+    }
 }
 
 bdld::Datum Parser::parseQuoteLike(const LexerToken& token) {

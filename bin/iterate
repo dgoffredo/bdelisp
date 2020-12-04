@@ -2,4 +2,4 @@
 
 BIN=$(dirname $0)
 
-$BIN/format && $BIN/build 2>&1 | head -10
+$BIN/format && $BIN/build 2>&1 | less

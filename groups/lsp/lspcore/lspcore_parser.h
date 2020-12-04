@@ -5,6 +5,8 @@
 #include <bdlb_variant.h>
 #include <bdld_datum.h>
 #include <bsl_string.h>
+#include <bsl_utility.h>
+#include <bsl_vector.h>
 #include <lspcore_lexer.h>
 
 namespace BloombergLP {
@@ -17,6 +19,10 @@ namespace lspcore {
 namespace bdlb  = BloombergLP::bdlb;
 namespace bdld  = BloombergLP::bdld;
 namespace bslma = BloombergLP::bslma;
+
+// TODO: Currently this parser generates garbage.
+// Either clean it up, or document that it must be used
+// with a garbage collecting allocator.
 
 struct ParserError {
     bsl::string what;
@@ -61,6 +67,10 @@ class Parser {
     bdld::Datum parsePairSecond(const LexerToken&);
 
     LexerToken next();
+
+    bool appendMapItem(
+        bsl::vector<bsl::pair<bdld::Datum, bdld::Datum> >* items,
+        LexerToken                                         openCurly);
 };
 
 }  // namespace lspcore
