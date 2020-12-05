@@ -18,6 +18,7 @@ struct Builtins {
     };
 
     static bool isBuiltin(const bdld::Datum& datum, int typeOffset);
+    static bool isBuiltin(const bdld::DatumUdt& udt, int typeOffset);
 
     // Return which 'Builtin' is indicated by the specified 'udtData'. The
     // behavior is undefined unless 'udtData' is the '.data()' value of a

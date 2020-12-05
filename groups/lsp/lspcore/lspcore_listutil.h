@@ -51,6 +51,22 @@ struct ListUtil {
                                           const bdld::Datum* end,
                                           int                typeOffset,
                                           bslma::Allocator*  allocator);
+
+    // Return whether the specified 'pair' is a proper list. A proper list is a
+    // composition of pairs whose "end" is null, e.g.
+    //
+    //     (pair 1 (pair 2 (pair 3 (pair 4 ()))))
+    //
+    // is the proper list
+    //
+    //     (1 2 3 4)
+    //
+    // The salient property is that 4 is paired with null (which is also the
+    // empty list).
+    //
+    // Use the specified 'typeOffset' when determining the user-defined type
+    // code for a 'Pair'.
+    static bool isProperList(const bdld::Datum& datum, int typeOffset);
 };
 
 inline bdld::Datum ListUtil::createList(

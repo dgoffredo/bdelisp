@@ -5,8 +5,10 @@
 #include <bsl_sstream.h>
 #include <lspcore_builtins.h>
 #include <lspcore_interpreter.h>
+#include <lspcore_listutil.h>
 #include <lspcore_pair.h>
 #include <lspcore_printutil.h>
+#include <lspcore_procedure.h>
 #include <lspcore_symbolutil.h>
 #include <lspcore_userdefinedtypes.h>
 
@@ -143,21 +145,6 @@ bdld::Datum Interpreter::evaluateIntMap(const bdld::DatumIntMapRef& map,
 bdld::Datum Interpreter::evaluatePair(const Pair&  pair,
                                       Environment& environment) {
     const bdld::Datum head = evaluateExpression(pair.first, environment);
-    // Cases:
-    // - builtin: dispatch to appropriate method
-    //     - quote
-    //     - set!
-    //     - lambda
-    // - native_procedure: bsl::vector<Datum> of the evaluated args, call
-    // function
-    // - procedure: inspect the procedure to get positional and tail args
-    //     - positionals go into a bsl::vector<Datum>, while tail args cons
-    //     into a list
-    //     - for loop, goto, all that jazz. This will be a large function.
-    // - otherwise, error: cannot invoke object as procedure ...
-    //     - WAIT, what about applying keys to maps and stuff. Fine, fine...
-    //     - a bunch of special cases to check
-    // TODO
 
     switch (head.type()) {
         case bdld::Datum::e_ARRAY:
@@ -166,19 +153,49 @@ bdld::Datum Interpreter::evaluatePair(const Pair&  pair,
             // TODO: These are functions of their keys.
             throw bdld::Datum::createError(
                 -1, "invoking dicts/vectors not yet implemented", allocator());
-        case bdld::Datum::e_USERDEFINED:
+        case bdld::Datum::e_USERDEFINED: {
+            const bdld::DatumUdt udt = head.theUdt();
             // Valid cases:
             // - procedure
             // - native procedure
             // - builtin
-            // Otherwise, fall through.
-            if (NativeProcedureUtil::isNativeProcedure(head, d_typeOffset)) {
-                // TODO: Could have it return a continuation in the future.
-                return invokeNative(head, pair.second, environment);
+            //
+            // Otherwise, fall through to the next section, which produces an
+            // error.
+            //
+            if (Procedure::isProcedure(udt, d_typeOffset)) {
+                // TODO
+                throw bdld::Datum::createError(
+                    -1,
+                    "procedure invocation not yet implemented",
+                    allocator());
             }
-            // TODO: handle other valid cases
-
-            // fall through
+            if (NativeProcedureUtil::isNativeProcedure(udt, d_typeOffset)) {
+                // TODO: Could have it return a continuation in the future.
+                return invokeNative(udt, pair.second, environment);
+            }
+            if (Builtins::isBuiltin(udt, d_typeOffset)) {
+                switch (Builtins::fromUdtData(udt.data())) {
+                    case Builtins::e_LAMBDA:
+                        return evaluateLambda(pair.second, environment);
+                    case Builtins::e_DEFINE:
+                        // TODO
+                        throw bdld::Datum::createError(
+                            -1, "\"define\" not yet implemented", allocator());
+                    case Builtins::e_SET:
+                        // TODO
+                        throw bdld::Datum::createError(
+                            -1, "\"set!\" not yet implemented", allocator());
+                    case Builtins::e_QUOTE:
+                        // TODO
+                        throw bdld::Datum::createError(
+                            -1, "\"quote\" not yet implemented", allocator());
+                    case Builtins::e_UNDEFINED:
+                        break;
+                }
+            }
+        }
+        // fall through
         case bdld::Datum::e_NIL:
         case bdld::Datum::e_INTEGER:
         case bdld::Datum::e_DOUBLE:
@@ -233,9 +250,107 @@ bdld::Datum Interpreter::evaluateSymbol(const bdld::Datum& asString,
     return entry->second;
 }
 
-bdld::Datum Interpreter::invokeNative(const bdld::Datum& nativeProcedure,
-                                      const bdld::Datum& tail,
-                                      Environment&       environment) {
+bdld::Datum Interpreter::evaluateLambda(const bdld::Datum& tail,
+                                        Environment&) {
+    // 'tail' is the lambda expression but without the leading 'lambda' or 'λ'
+    // symbol. The form, in a syntax-rules like notation, is one of:
+    //
+    //     (param-list body-first body-rest ...)
+    //     ((param ...) body-first body-rest ...)
+    //     ((param params ... . rest-param) body-first body-rest ...)
+    //
+    // That is, 'tail' is a list with at least two elements.
+    //
+    // The first element is the paramuments, and is one of: a symbol, a list of
+    // symbols, or an improper list of symbols (where the 'rest-param' is bound
+    // to a list).
+    //
+    // The second element is the first form in the body of the procedure, and
+    // may be followed by zero or more additional forms.
+
+    // First do some validation of the overall shape of the lambda form.
+    if (!Pair::isPair(tail, d_typeOffset)) {
+        throw bdld::Datum::createError(
+            -1,
+            "λ expression must be a list containing parameters and a body",
+            allocator());
+    }
+
+    const Pair&        tailPair   = Pair::access(tail);
+    const bdld::Datum& parameters = tailPair.first;
+    const bdld::Datum& body       = tailPair.second;
+    if (body.isNull()) {
+        throw bdld::Datum::createError(
+            -1, "λ expression body must be nonempty", allocator());
+    }
+    if (!Pair::isPair(body, d_typeOffset)) {
+        throw bdld::Datum::createError(
+            -1, "λ expression must be a proper list", allocator());
+    }
+
+    Procedure* procedure = new (*allocator()) Procedure;
+
+    // Parse the parameters.
+    if (SymbolUtil::isSymbol(parameters, d_typeOffset)) {
+        procedure->restParameter = SymbolUtil::access(parameters).theString();
+    }
+    else if (parameters.isNull()) {
+        // no positional parameters, and no rest parameter
+    }
+    else if (Pair::isPair(parameters, d_typeOffset)) {
+        bdld::Datum rest = parameters;
+        do {
+            const Pair&        pair      = Pair::access(rest);
+            const bdld::Datum& parameter = pair.first;
+
+            if (!SymbolUtil::isSymbol(parameter, d_typeOffset)) {
+                throw bdld::Datum::createError(
+                    -1,
+                    "λ expression parameters must all be symbols",
+                    allocator());
+            }
+            procedure->positionalParameters.push_back(
+                SymbolUtil::access(parameter).theString());
+
+            rest = pair.second;
+        } while (Pair::isPair(rest, d_typeOffset));
+
+        // If 'rest' isn't null by this point, then there's a trailing "rest"
+        // parameter, e.g.
+        //
+        //     (λ (foo bar . rest) ...)
+        //
+        if (!rest.isNull()) {
+            if (!SymbolUtil::isSymbol(rest, d_typeOffset)) {
+                throw bdld::Datum::createError(
+                    -1,
+                    "λ expression parameters must all be symbols",
+                    allocator());
+            }
+            procedure->restParameter = SymbolUtil::access(rest).theString();
+        }
+    }
+    else {
+        throw bdld::Datum::createError(
+            -1,
+            "λ expression's second element must be a proper list of symbols, "
+            "an improper list of symbols, or a symbol",
+            allocator());
+    }
+
+    if (!ListUtil::isProperList(body, d_typeOffset)) {
+        throw bdld::Datum::createError(
+            -1, "λ expression body must be a proper list", allocator());
+    }
+    procedure->body = &Pair::access(body);
+
+    return bdld::Datum::createUdt(
+        procedure, UserDefinedTypes::e_PROCEDURE + d_typeOffset);
+}
+
+bdld::Datum Interpreter::invokeNative(const bdld::DatumUdt& nativeProcedure,
+                                      const bdld::Datum&    tail,
+                                      Environment&          environment) {
     BSLS_ASSERT(
         NativeProcedureUtil::isNativeProcedure(nativeProcedure, d_typeOffset));
 

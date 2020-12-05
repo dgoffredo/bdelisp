@@ -436,6 +436,10 @@ bdld::Datum Parser::parseList(const LexerToken& token) {
                     return ListUtil::createList(
                         elements, d_typeOffset, d_datumAllocator_p);
                 case LexerToken::e_PAIR_SEPARATOR:  // one more
+                    if (elements.empty()) {
+                        // ( . foo): there needs to be something before the "."
+                        throw;
+                    }
                     elements.push_back(parsePairSecond(error.where));
                     return ListUtil::createImproperList(
                         elements, d_typeOffset, d_datumAllocator_p);

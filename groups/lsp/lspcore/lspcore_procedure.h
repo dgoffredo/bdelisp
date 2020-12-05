@@ -1,11 +1,22 @@
 #ifndef INCLUDED_LSPCORE_PROCEDURE
 #define INCLUDED_LSPCORE_PROCEDURE
 
+#include <bdld_datum.h>
 #include <bsl_string.h>
 #include <bsl_vector.h>
-#include <lspcore_pair.h>
+#include <lspcore_userdefinedtypes.h>
+
+namespace BloombergLP {
+namespace bslma {
+class Allocator;
+}  // namespace bslma
+}  // namespace BloombergLP
 
 namespace lspcore {
+namespace bdld  = BloombergLP::bdld;
+namespace bslma = BloombergLP::bslma;
+
+class Pair;
 
 struct Procedure {
     // 'positionalParameters' and 'restParameters' contain the names of the
@@ -31,8 +42,34 @@ struct Procedure {
     //
     //     ((debug "x:" x "y:" y) (if (> x y) x y))
     //
-    Pair body;
+    const Pair* body;
+
+    static bool isProcedure(const bdld::Datum&, int typeOffset);
+    static bool isProcedure(const bdld::DatumUdt&, int typeOffset);
+
+    // Note that 'Procedure' has no 'create' function. Procedures are created
+    // by the 'Interpreter'.
+
+    static const Procedure& access(const bdld::Datum&);
+    static const Procedure& access(const bdld::DatumUdt&);
 };
+
+inline bool Procedure::isProcedure(const bdld::Datum& datum, int typeOffset) {
+    return datum.isUdt() && isProcedure(datum.theUdt(), typeOffset);
+}
+
+inline bool Procedure::isProcedure(const bdld::DatumUdt& udt, int typeOffset) {
+    return udt.type() - typeOffset == UserDefinedTypes::e_PROCEDURE;
+}
+
+inline const Procedure& Procedure::access(const bdld::Datum& datum) {
+    BSLS_ASSERT(datum.isUdt());
+    return access(datum.theUdt());
+}
+
+inline const Procedure& Procedure::access(const bdld::DatumUdt& udt) {
+    return *static_cast<Procedure*>(udt.data());
+}
 
 }  // namespace lspcore
 

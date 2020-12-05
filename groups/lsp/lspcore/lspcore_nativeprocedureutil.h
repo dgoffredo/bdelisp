@@ -58,12 +58,12 @@ class NativeProcedureUtil {
                        Environment&              environment,
                        bslma::Allocator*         allocator);
 
+  private:
     static void invoke(void*                     datumUdtData,
                        bsl::vector<bdld::Datum>& argsAndOutput,
                        Environment&              environment,
                        bslma::Allocator*         allocator);
 
-  private:
     static const bool FUNC_PTR_FITS = sizeof(Signature*) == sizeof(void*);
 };
 

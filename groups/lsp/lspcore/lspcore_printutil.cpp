@@ -18,6 +18,7 @@
 #include <lspcore_builtins.h>
 #include <lspcore_pair.h>
 #include <lspcore_printutil.h>
+#include <lspcore_procedure.h>
 #include <lspcore_symbolutil.h>
 #include <lspcore_userdefinedtypes.h>
 
@@ -25,6 +26,9 @@ using namespace BloombergLP;
 
 namespace lspcore {
 namespace {
+
+// flags that can be bitwise or'd together and passed to 'printList':
+const int k_NO_PARENTHESES = 1;
 
 class PrintVisitor {
     bsl::ostream& stream;
@@ -53,10 +57,12 @@ class PrintVisitor {
     void operator()(const bdld::DatumMapRef&);
     void operator()(const bdld::DatumBinaryRef&);
     void operator()(bdldfp::Decimal64);
-    void printList(const Pair&);
+    void printList(const Pair&, int flags = 0);
     void printSymbol(const bdld::Datum&);
     template <typename MapRef, typename Entry>
     void printMap(const MapRef&);
+    void printPointer(const void*);
+    void printProcedure(const Procedure&);
 };
 
 void PrintVisitor::operator()(bslmf::Nil) {
@@ -127,21 +133,19 @@ void PrintVisitor::operator()(const bdld::DatumUdt& value) {
             stream << Builtins::name(Builtins::fromUdtData(value.data()));
             return;
         case UserDefinedTypes::e_PROCEDURE:
+            printProcedure(Procedure::access(value));
+            return;
         case UserDefinedTypes::e_NATIVE_PROCEDURE:
-            BSLS_ASSERT_OPT(!"not implemented");
+            stream << "#procedure[native ";
+            printPointer(value.data());
+            stream << "]";
+            return;
     }
 
     // Otherwise, it's some user-defined type we're not aware of. Print its
     // type ID and its address, e.g.: '#udt[23 "0x3434324"]'.
-    // 'value.data() == 0' (null) is treated specially, because I noticed that
-    // the leading "0x" was being omitted in that case.
     stream << "#udt[" << value.type() << " \"";
-    if (value.data()) {
-        stream << value.data();
-    }
-    else {
-        stream << "0x0";
-    }
+    printPointer(value.data());
     stream << "\"]";
 }
 
@@ -200,8 +204,10 @@ void PrintVisitor::operator()(bdldfp::Decimal64 value) {
     baljsn::PrintUtil::printValue(stream, value);
 }
 
-void PrintVisitor::printList(const Pair& pair) {
-    stream << "(";
+void PrintVisitor::printList(const Pair& pair, int flags) {
+    if (!(flags & k_NO_PARENTHESES)) {
+        stream << "(";
+    }
     pair.first.apply(*this);
     bdld::Datum item = pair.second;
 
@@ -219,13 +225,64 @@ void PrintVisitor::printList(const Pair& pair) {
         }
     }
 
-    stream << ")";
+    if (!(flags & k_NO_PARENTHESES)) {
+        stream << ")";
+    }
 }
 
 void PrintVisitor::printSymbol(const bdld::Datum& value) {
     BSLS_ASSERT(value.isString());
 
     stream << value.theString();
+}
+
+void PrintVisitor::printPointer(const void* value) {
+    if (value) {
+        stream << value;
+    }
+    else {
+        stream << "0x0";
+    }
+}
+
+void PrintVisitor::printProcedure(const Procedure& value) {
+    BSLS_ASSERT(value.body);
+
+    stream << "#procedure[(λ ";
+
+    // Example parameters forms:
+    //
+    //     ()
+    //     foo
+    //     (foo)
+    //     (foo bar)
+    //     (foo . bar)
+    //     (foo bar . baz)
+    //
+    if (value.positionalParameters.empty() && !value.restParameter.empty()) {
+        stream << value.restParameter;
+    }
+    else {
+        stream << "(";
+        bsl::vector<bsl::string>::const_iterator iter =
+            value.positionalParameters.begin();
+        const bsl::vector<bsl::string>::const_iterator end =
+            value.positionalParameters.end();
+        if (iter != end) {
+            stream << *iter;
+            for (++iter; iter != end; ++iter) {
+                stream << " " << *iter;
+            }
+            if (!value.restParameter.empty()) {
+                stream << " . " << value.restParameter;
+            }
+        }
+        stream << ")";
+    }
+
+    stream << " ";
+    printList(*value.body, k_NO_PARENTHESES);
+    stream << "]";
 }
 
 }  // namespace

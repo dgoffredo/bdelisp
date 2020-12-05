@@ -45,9 +45,10 @@ class Interpreter {
     bdld::Datum evaluateIntMap(const bdld::DatumIntMapRef&, Environment&);
     bdld::Datum evaluatePair(const Pair&, Environment&);
     bdld::Datum evaluateSymbol(const bdld::Datum&, Environment&);
+    bdld::Datum evaluateLambda(const bdld::Datum&, Environment&);
 
-    bdld::Datum invokeNative(const bdld::Datum& nativeProcedure,
-                             const bdld::Datum& tail,
+    bdld::Datum invokeNative(const bdld::DatumUdt& nativeProcedure,
+                             const bdld::Datum&    tail,
                              Environment&);
 
     bslma::Allocator* allocator() const;

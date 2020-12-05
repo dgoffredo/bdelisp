@@ -49,4 +49,12 @@ bdld::Datum ListUtil::createImproperList(const bdld::Datum* begin,
     return improperList;
 }
 
+bool ListUtil::isProperList(const bdld::Datum& datum, int typeOffset) {
+    bdld::Datum rest = datum;
+    while (Pair::isPair(rest, typeOffset)) {
+        rest = Pair::access(rest).second;
+    }
+    return rest.isNull();
+}
+
 }  // namespace lspcore

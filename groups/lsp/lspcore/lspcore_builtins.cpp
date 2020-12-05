@@ -7,8 +7,11 @@
 namespace lspcore {
 
 bool Builtins::isBuiltin(const bdld::Datum& datum, int typeOffset) {
-    return datum.isUdt() &&
-           datum.theUdt().type() - typeOffset == UserDefinedTypes::e_BUILTIN;
+    return datum.isUdt() && isBuiltin(datum.theUdt(), typeOffset);
+}
+
+bool Builtins::isBuiltin(const bdld::DatumUdt& udt, int typeOffset) {
+    return udt.type() - typeOffset == UserDefinedTypes::e_BUILTIN;
 }
 
 Builtins::Builtin Builtins::fromUdtData(void* udtData) {
