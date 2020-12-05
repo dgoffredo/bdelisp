@@ -8,6 +8,7 @@
 #include <bsl_vector.h>
 #include <bslma_default.h>
 #include <bsls_assert.h>
+#include <lspcore_interpreter.h>
 #include <lspcore_lexer.h>
 #include <lspcore_linecounter.h>
 #include <lspcore_listutil.h>
@@ -20,6 +21,36 @@ namespace {
 namespace bdlb  = BloombergLP::bdlb;
 namespace bdld  = BloombergLP::bdld;
 namespace bslma = BloombergLP::bslma;
+
+int interpreter() {
+    lspcore::Lexer       lexer;
+    bsl::string          subject;
+    const int            typeOffset = 0;
+    bslma::Allocator*    allocator  = bslma::Default::allocator();
+    lspcore::Parser      parser(lexer, typeOffset, allocator);
+    lspcore::Interpreter interpreter(typeOffset, allocator);
+
+    bdlb::Variant2<bdld::Datum, lspcore::ParserError> parserResult;
+    while (bsl::cout << "\nbdelisp> ", bsl::getline(bsl::cin, subject)) {
+        int rc = lexer.reset(subject);
+        BSLS_ASSERT_OPT(rc == 0);
+
+        parserResult = parser.parse();
+        if (parserResult.is<bdld::Datum>()) {
+            const bdld::Datum& expression = parserResult.the<bdld::Datum>();
+            const bdld::Datum  result     = interpreter.evaluate(expression);
+            lspcore::PrintUtil::print(bsl::cout, result, typeOffset);
+        }
+        else {
+            const lspcore::ParserError& error =
+                parserResult.the<lspcore::ParserError>();
+            bsl::cout << "Parser error: " << error.what
+                      << "\ntoken: " << error.where;
+        }
+    }
+
+    return 0;
+}
 
 int regurgitate() {
     lspcore::Lexer    lexer;
@@ -197,6 +228,9 @@ int main(int argc, char* argv[]) {
     }
     else if (which == "regurgitate") {
         return regurgitate();
+    }
+    else if (which == "interpreter") {
+        return interpreter();
     }
 
     BSLS_ASSERT_OPT(which == "counter");

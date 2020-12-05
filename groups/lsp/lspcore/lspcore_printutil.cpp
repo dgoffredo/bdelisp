@@ -15,6 +15,7 @@
 #include <bsl_ostream.h>
 #include <bsl_string_view.h>
 #include <bsls_assert.h>
+#include <lspcore_builtins.h>
 #include <lspcore_pair.h>
 #include <lspcore_printutil.h>
 #include <lspcore_symbolutil.h>
@@ -119,7 +120,14 @@ void PrintVisitor::operator()(const bdld::DatumUdt& value) {
             return printList(Pair::access(value));
         case UserDefinedTypes::e_SYMBOL:
             return printSymbol(SymbolUtil::access(value));
+        case UserDefinedTypes::e_BUILTIN:
+            // can't user 'printSymbol' because there's no 'bdld::Datum'
+            // string. That's fine, because we don't need it -- builtin names
+            // are hard-coded.
+            stream << Builtins::name(Builtins::fromUdtData(value.data()));
+            return;
         case UserDefinedTypes::e_PROCEDURE:
+        case UserDefinedTypes::e_NATIVE_PROCEDURE:
             BSLS_ASSERT_OPT(!"not implemented");
     }
 

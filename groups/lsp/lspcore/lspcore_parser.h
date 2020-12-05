@@ -21,7 +21,7 @@ namespace bdld  = BloombergLP::bdld;
 namespace bslma = BloombergLP::bslma;
 
 // Note:
-// 
+//
 // This parser generates garbage. Some of it could be avoided, but not
 // all of it. The fundamental problem is that 'bdld::Datum::destroy' does not
 // know how to destroy objects referred to by user-defined types, and there is
