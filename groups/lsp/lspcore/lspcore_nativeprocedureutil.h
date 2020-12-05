@@ -28,32 +28,38 @@ class NativeProcedureUtil {
         // 'argsAndOutput' contains the arguments passed to the procedure. The
         // procedure returns a value by resizing 'argsAndOutput' to size 1 and
         // assigned the return value to the vector's first element.
-        bsl::vector<bdld::Datum>* argsAndOutput,
+        // A native procedure signals an error by raising an exception of type
+        // 'bdld::Datum', where the datum object is of error type.
+        bsl::vector<bdld::Datum>& argsAndOutput,
         // 'environment' is the lexical environment in which the procedure is
         // being invoked. If during the course of its execution, the procedure
         // produces a procedure that captures part of the environment, the
         // executing procedure must call 'environment.markAsReferenced()'.
         Environment& environment,
-        // All parts of the resulting 'bdld::Datum' must be allocated using
-        // 'allocator'.
+        // All parts of the returned or thrown 'bdld::Datum' must be allocated
+        // using 'allocator'.
         bslma::Allocator* allocator);
 
+    static bool isNativeProcedure(const bdld::Datum& datum, int typeOffset);
+    static bool isNativeProcedure(const bdld::DatumUdt& udt, int typeOffset);
+
     static bdld::Datum create(const bsl::function<Signature>&,
+                              int typeOffset,
                               bslma::Allocator*);
-    static bdld::Datum create(Signature*, bslma::Allocator*);
+    static bdld::Datum create(Signature*, int typeOffset, bslma::Allocator*);
 
     static void invoke(const bdld::Datum&        function,
-                       bsl::vector<bdld::Datum>* argsAndOutput,
+                       bsl::vector<bdld::Datum>& argsAndOutput,
                        Environment&              environment,
                        bslma::Allocator*         allocator);
 
     static void invoke(const bdld::DatumUdt&     function,
-                       bsl::vector<bdld::Datum>* argsAndOutput,
+                       bsl::vector<bdld::Datum>& argsAndOutput,
                        Environment&              environment,
                        bslma::Allocator*         allocator);
 
     static void invoke(void*                     datumUdtData,
-                       bsl::vector<bdld::Datum>* argsAndOutput,
+                       bsl::vector<bdld::Datum>& argsAndOutput,
                        Environment&              environment,
                        bslma::Allocator*         allocator);
 
@@ -61,8 +67,20 @@ class NativeProcedureUtil {
     static const bool FUNC_PTR_FITS = sizeof(Signature*) == sizeof(void*);
 };
 
-bdld::Datum NativeProcedureUtil::create(
-    const bsl::function<Signature>& function, bslma::Allocator* allocator) {
+inline bool NativeProcedureUtil::isNativeProcedure(const bdld::Datum& datum,
+                                                   int typeOffset) {
+    return datum.isUdt() && isNativeProcedure(datum.theUdt(), typeOffset);
+}
+
+inline bool NativeProcedureUtil::isNativeProcedure(const bdld::DatumUdt& udt,
+                                                   int typeOffset) {
+    return udt.type() - typeOffset == UserDefinedTypes::e_NATIVE_PROCEDURE;
+}
+
+inline bdld::Datum NativeProcedureUtil::create(
+    const bsl::function<Signature>& function,
+    int                             typeOffset,
+    bslma::Allocator*               allocator) {
     BSLS_ASSERT(allocator);
 
     // Using allocators in 'bsl::function' is ugly. The corresponding facility
@@ -80,11 +98,13 @@ bdld::Datum NativeProcedureUtil::create(
     char* buffer = reinterpret_cast<char*>(&data);
     LSPCORE_LOWBYTE(buffer) |= 1;
 
-    return bdld::Datum::createUdt(data, UserDefinedTypes::e_NATIVE_PROCEDURE);
+    return bdld::Datum::createUdt(
+        data, UserDefinedTypes::e_NATIVE_PROCEDURE + typeOffset);
 }
 
-bdld::Datum NativeProcedureUtil::create(Signature*        function,
-                                        bslma::Allocator* allocator) {
+inline bdld::Datum NativeProcedureUtil::create(Signature*        function,
+                                               int               typeOffset,
+                                               bslma::Allocator* allocator) {
     void* data;
 
     if (FUNC_PTR_FITS) {
@@ -96,28 +116,32 @@ bdld::Datum NativeProcedureUtil::create(Signature*        function,
         data = new (*allocator) Signature*(function);
     }
 
-    return bdld::Datum::createUdt(data, UserDefinedTypes::e_NATIVE_PROCEDURE);
+    return bdld::Datum::createUdt(
+        data, UserDefinedTypes::e_NATIVE_PROCEDURE + typeOffset);
 }
 
-void NativeProcedureUtil::invoke(const bdld::Datum&        function,
-                                 bsl::vector<bdld::Datum>* argsAndOutput,
-                                 Environment&              environment,
-                                 bslma::Allocator*         allocator) {
+inline void NativeProcedureUtil::invoke(
+    const bdld::Datum&        function,
+    bsl::vector<bdld::Datum>& argsAndOutput,
+    Environment&              environment,
+    bslma::Allocator*         allocator) {
     BSLS_ASSERT(function.isUdt());
     return invoke(function.theUdt(), argsAndOutput, environment, allocator);
 }
 
-void NativeProcedureUtil::invoke(const bdld::DatumUdt&     function,
-                                 bsl::vector<bdld::Datum>* argsAndOutput,
-                                 Environment&              environment,
-                                 bslma::Allocator*         allocator) {
+inline void NativeProcedureUtil::invoke(
+    const bdld::DatumUdt&     function,
+    bsl::vector<bdld::Datum>& argsAndOutput,
+    Environment&              environment,
+    bslma::Allocator*         allocator) {
     return invoke(function.data(), argsAndOutput, environment, allocator);
 }
 
-void NativeProcedureUtil::invoke(void*                     datumUdtData,
-                                 bsl::vector<bdld::Datum>* argsAndOutput,
-                                 Environment&              environment,
-                                 bslma::Allocator*         allocator) {
+inline void NativeProcedureUtil::invoke(
+    void*                     datumUdtData,
+    bsl::vector<bdld::Datum>& argsAndOutput,
+    Environment&              environment,
+    bslma::Allocator*         allocator) {
     // Unpack the invokable from 'datumUdtData', and then invoke it with the
     // specified arguments.
 

@@ -237,4 +237,9 @@ void PrintUtil::print(bsl::ostream&      stream,
     datum.apply(visitor);
 }
 
+void PrintUtil::print(bsl::ostream& stream, const Pair& pair, int typeOffset) {
+    PrintVisitor visitor(stream, typeOffset);
+    visitor.printList(pair);
+}
+
 }  // namespace lspcore

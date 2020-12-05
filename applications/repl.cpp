@@ -8,6 +8,7 @@
 #include <bsl_vector.h>
 #include <bslma_default.h>
 #include <bsls_assert.h>
+#include <lspcore_arithmeticutil.h>
 #include <lspcore_interpreter.h>
 #include <lspcore_lexer.h>
 #include <lspcore_linecounter.h>
@@ -29,6 +30,22 @@ int interpreter() {
     bslma::Allocator*    allocator  = bslma::Default::allocator();
     lspcore::Parser      parser(lexer, typeOffset, allocator);
     lspcore::Interpreter interpreter(typeOffset, allocator);
+
+    int rc;
+    rc = interpreter.defineNativeProcedure("+", lspcore::ArithmeticUtil::add);
+    BSLS_ASSERT_OPT(rc == 0);
+    rc = interpreter.defineNativeProcedure("-",
+                                           lspcore::ArithmeticUtil::subtract);
+    BSLS_ASSERT_OPT(rc == 0);
+    rc = interpreter.defineNativeProcedure("*",
+                                           lspcore::ArithmeticUtil::multiply);
+    BSLS_ASSERT_OPT(rc == 0);
+    rc = interpreter.defineNativeProcedure("/",
+                                           lspcore::ArithmeticUtil::divide);
+    BSLS_ASSERT_OPT(rc == 0);
+    rc = interpreter.defineNativeProcedure("=",
+                                           lspcore::ArithmeticUtil::equate);
+    BSLS_ASSERT_OPT(rc == 0);
 
     bdlb::Variant2<bdld::Datum, lspcore::ParserError> parserResult;
     while (bsl::cout << "\nbdelisp> ", bsl::getline(bsl::cin, subject)) {

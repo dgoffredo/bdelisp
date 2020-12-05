@@ -12,11 +12,14 @@ class Datum;
 namespace lspcore {
 namespace bdld = BloombergLP::bdld;
 
+class Pair;
+
 struct PrintUtil {
     // TODO: document
     static void print(bsl::ostream&      stream,
                       const bdld::Datum& datum,
                       int                typeOffset);
+    static void print(bsl::ostream& stream, const Pair& pair, int typeOffset);
 };
 
 }  // namespace lspcore

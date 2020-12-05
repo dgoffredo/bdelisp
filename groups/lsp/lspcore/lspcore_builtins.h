@@ -17,14 +17,17 @@ struct Builtins {
         // don't forget to update the definition of 'fromUdtData'
     };
 
+    static bool isBuiltin(const bdld::Datum& datum, int typeOffset);
+
     // Return which 'Builtin' is indicated by the specified 'udtData'. The
     // behavior is undefined unless 'udtData' is the '.data()' value of a
     // 'bdld::DatumUdt' whose '.type()' is 'UserDefinedTypes::e_BUILTIN' (after
     // considering any type offset).
     static Builtin fromUdtData(void* udtData);
 
-    // Return a datum whose value corresponds to the specified 'builtin'.
-    static bdld::Datum toDatum(Builtin builtin);
+    // Return a datum whose value corresponds to the specified 'builtin',
+    // subject to the specified 'typeOffset' of the interpreter.
+    static bdld::Datum toDatum(Builtin builtin, int typeOffset);
 
     // Return a reference to a static UTF-8 string contaning the canonical
     // spelling of the specified 'builtin'.

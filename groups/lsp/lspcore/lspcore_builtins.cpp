@@ -6,6 +6,11 @@
 
 namespace lspcore {
 
+bool Builtins::isBuiltin(const bdld::Datum& datum, int typeOffset) {
+    return datum.isUdt() &&
+           datum.theUdt().type() - typeOffset == UserDefinedTypes::e_BUILTIN;
+}
+
 Builtins::Builtin Builtins::fromUdtData(void* udtData) {
     const bsl::intptr_t asInt = reinterpret_cast<bsl::intptr_t>(udtData);
 
@@ -15,10 +20,11 @@ Builtins::Builtin Builtins::fromUdtData(void* udtData) {
     return static_cast<Builtin>(asInt);
 }
 
-bdld::Datum Builtins::toDatum(Builtin builtin) {
+bdld::Datum Builtins::toDatum(Builtin builtin, int typeOffset) {
     void* const asPtr =
         reinterpret_cast<void*>(static_cast<bsl::intptr_t>(builtin));
-    return bdld::Datum::createUdt(asPtr, UserDefinedTypes::e_BUILTIN);
+    return bdld::Datum::createUdt(asPtr,
+                                  UserDefinedTypes::e_BUILTIN + typeOffset);
 }
 
 bsl::string_view Builtins::name(Builtin builtin) {
