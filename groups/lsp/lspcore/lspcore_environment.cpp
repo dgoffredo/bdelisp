@@ -8,12 +8,16 @@ namespace lspcore {
 
 Environment::Environment(bslma::Allocator* allocator)
 : d_locals(allocator)
-, d_parent_p(0) {
+, d_parent_p(0)
+, d_wasReferenced(false) {
 }
 
 Environment::Environment(Environment* parent, bslma::Allocator* allocator)
 : d_locals(allocator)
-, d_parent_p(parent) {
+, d_parent_p(parent)
+, d_wasReferenced(true) {
+    BSLS_ASSERT(parent);
+    parent->markAsReferenced();
 }
 
 const bsl::pair<const bsl::string, bdld::Datum>* Environment::lookup(

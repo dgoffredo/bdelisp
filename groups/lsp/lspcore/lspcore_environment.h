@@ -14,6 +14,12 @@ class Environment;
 class Environment {
     bsl::unordered_map<bsl::string, bdld::Datum> d_locals;
     Environment*                                 d_parent_p;
+    // 'd_wasReferenced' is used by an optimization in the interpreter. When a
+    // new environment is created that references this object as its parent, we
+    // set 'd_wasReferenced = true'. Then when evaluating tail calls, the
+    // interpreter has the option of reusing this environment instead of
+    // creating a new one, provided that 'd_wasReferenced == false'.
+    bool d_wasReferenced;
 
   public:
     explicit Environment(bslma::Allocator*);
@@ -35,11 +41,25 @@ class Environment {
     bsl::pair<const bsl::string, bdld::Datum>* define(
         bsl::string_view name, const bdld::Datum& value);
 
+    // Return whether this object has ever been the parent of another
+    // environment.
+    bool wasReferenced() const;
+
+    void markAsReferenced();
+
     bslma::Allocator* allocator() const;
 };
 
 inline bslma::Allocator* Environment::allocator() const {
     return d_locals.get_allocator().mechanism();
+}
+
+inline bool Environment::wasReferenced() const {
+    return d_wasReferenced;
+}
+
+inline void Environment::markAsReferenced() {
+    d_wasReferenced = true;
 }
 
 }  // namespace lspcore
