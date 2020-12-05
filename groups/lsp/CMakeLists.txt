@@ -6,11 +6,13 @@ endif()
 
 add_library(lsp
     lspcore/lspcore_builtins.cpp
+    lspcore/lspcore_endian.cpp
     lspcore/lspcore_environment.cpp
     lspcore/lspcore_interpreter.cpp
     lspcore/lspcore_lexer.cpp
     lspcore/lspcore_linecounter.cpp
     lspcore/lspcore_listutil.cpp
+    lspcore/lspcore_nativeprocedureutil.cpp
     lspcore/lspcore_pair.cpp
     lspcore/lspcore_parser.cpp
     lspcore/lspcore_printutil.cpp

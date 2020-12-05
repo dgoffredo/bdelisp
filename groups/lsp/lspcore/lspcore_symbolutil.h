@@ -9,8 +9,8 @@
 #include <bsl_string_view.h>
 #include <bslma_allocator.h>
 #include <bsls_assert.h>
-#include <bsls_platform.h>
 #include <bsls_types.h>
+#include <lspcore_endian.h>
 #include <lspcore_userdefinedtypes.h>
 
 namespace lspcore {
@@ -84,21 +84,8 @@ inline bool SymbolUtil::isSymbol(const bdld::Datum& datum, int typeOffset) {
 // depend on whether the platform is little-endian (e.g. x86) or big-endian
 // (e.g. SPARC).
 //
-// TODO: BDE might have utilities for these already. Also, consider using
-// inline functions in an 'impl' or 'detail' namespace, instead of using
-// macros.
-#ifdef BSLS_PLATFORM_IS_LITTLE_ENDIAN
-// little-endian, i.e. the least significant byte is first in memory
-#define LSPCORE_LOWBYTE(BUFFER) ((BUFFER)[0])
-// 'LSPCORE_BEGIN' is the beginning of the in-place string destination.
-#define LSPCORE_BEGIN(BUFFER) ((BUFFER) + 1)
-#else  // assume big-endian (ignore the possibility of mixed-endian systems)
-// big-endian, i.e. the least significant byte is last in memory
-#define LSPCORE_LOWBYTE(BUFFER) ((BUFFER)[sizeof(void*) - 1])
-// 'LSPCORE_BEGIN' is the beginning of the in-place string destination.
-#define LSPCORE_BEGIN(BUFFER)   (BUFFER)
-#endif
-
+// See 'lspcore_endian.h'.
+//
 // If the least significant bit of the least significant byte is set, then this
 // is the layout of the bits in that byte (least signifcant bits to the right):
 //
