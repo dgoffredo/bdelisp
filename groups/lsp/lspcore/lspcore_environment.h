@@ -28,9 +28,10 @@ class Environment {
     // In the environment local to this object, create an entry having the
     // specified 'name' and the specified 'value' if one does not already exist
     // in the local environment. Return a pointer to the created entry, or
-    // return null if a entry already exists with that name in the local
+    // return null if an entry already exists with that name in the local
     // environment. The local environment consists of those names stored within
-    // this object, and not those stored in its ancestors.
+    // this object specifically, without considering the ancestors of this
+    // object.
     bsl::pair<const bsl::string, bdld::Datum>* define(
         bsl::string_view name, const bdld::Datum& value);
 

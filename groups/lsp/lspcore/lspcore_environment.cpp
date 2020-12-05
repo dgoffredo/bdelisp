@@ -25,16 +25,15 @@ const bsl::pair<const bsl::string, bdld::Datum>* Environment::lookup(
     // not-exactly-the-same-type, which is what I want, so I'm not sure what
     // went wrong there. I suspect that this code is generating a 'string' on
     // the fly with every lookup, which is bad. Look into this.
-    const bsl::unordered_map<bsl::string, bdld::Datum>::const_iterator found =
-        d_locals.find(bslstl::StringRef(name));
+    const Environment* env = this;
+    do {
+        const bsl::unordered_map<bsl::string, bdld::Datum>::const_iterator
+            found = env->d_locals.find(bslstl::StringRef(name));
 
-    if (found != d_locals.end()) {
-        return &*found;
-    }
-
-    if (d_parent_p) {
-        return d_parent_p->lookup(name);
-    }
+        if (found != env->d_locals.end()) {
+            return &*found;
+        }
+    } while ((env = env->d_parent_p));
 
     return 0;
 }
