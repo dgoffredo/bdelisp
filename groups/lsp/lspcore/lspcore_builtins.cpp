@@ -40,6 +40,8 @@ bsl::string_view Builtins::name(Builtin builtin) {
             return "define";
         case e_SET:
             return "set!";
+        case e_IF:
+            return "if";
         default:
             BSLS_ASSERT_OPT(builtin == e_QUOTE);
             return "quote";

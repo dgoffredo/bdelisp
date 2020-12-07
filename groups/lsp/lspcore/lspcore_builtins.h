@@ -13,8 +13,9 @@ struct Builtins {
         e_LAMBDA,
         e_DEFINE,
         e_SET,  // as in (set! foo bar)
+        e_IF,
         e_QUOTE
-        // don't forget to update the definition of 'fromUdtData'
+        // don't forget to update the definition of 'fromUdtData' and 'name'
     };
 
     static bool isBuiltin(const bdld::Datum& datum, int typeOffset);

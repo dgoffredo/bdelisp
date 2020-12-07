@@ -180,9 +180,7 @@ bdld::Datum Interpreter::evaluatePair(const Pair&  pair,
                     case Builtins::e_LAMBDA:
                         return evaluateLambda(pair.second, environment);
                     case Builtins::e_DEFINE:
-                        // TODO
-                        throw bdld::Datum::createError(
-                            -1, "\"define\" not yet implemented", allocator());
+                        return evaluateDefine(pair.second, environment);
                     case Builtins::e_SET:
                         // TODO
                         throw bdld::Datum::createError(
@@ -191,6 +189,10 @@ bdld::Datum Interpreter::evaluatePair(const Pair&  pair,
                         // TODO
                         throw bdld::Datum::createError(
                             -1, "\"quote\" not yet implemented", allocator());
+                    case Builtins::e_IF:
+                        // TODO
+                        throw bdld::Datum::createError(
+                            -1, "\"if\" not yet implemented", allocator());
                     case Builtins::e_UNDEFINED:
                         break;
                 }
@@ -354,6 +356,80 @@ bdld::Datum Interpreter::evaluateLambda(const bdld::Datum& tail,
     return bdld::Datum::createUdt(
         procedure.release().first,  // the pointer
         UserDefinedTypes::e_PROCEDURE + d_typeOffset);
+}
+
+bdld::Datum Interpreter::evaluateDefine(const bdld::Datum& tail,
+                                        Environment&       environment) {
+    // Other lisps disallow 'define' in "expression context." When I start
+    // thinking more carefully about environments and macros, I'll probably do
+    // the same. For now, though, 'define' can appear anywhere, and evaluates
+    // to the defined value.
+
+    // 'tail' is the part of the form following the "define" symbol.
+    //
+    //     (name value)
+    //
+    // where 'name' is a symbol.
+    //
+    // TODO: add support to the lambda shorthand, i.e.
+    //
+    //     ((name args ...) body rest ...)
+    //
+    // TODO: currently not supported.
+
+    if (!Pair::isPair(tail, d_typeOffset)) {
+        throw bdld::Datum::createError(
+            -1,
+            "\"define\" form must be a proper list having three elements",
+            allocator());
+    }
+
+    const Pair& form = Pair::access(tail);
+    bdld::Datum name = form.first;
+    if (!SymbolUtil::isSymbol(name, d_typeOffset)) {
+        throw bdld::Datum::createError(-1,
+                                       "\"define\" form's first argument must "
+                                       "be a symbol naming the value",
+                                       allocator());
+    }
+    name = SymbolUtil::access(name);
+
+    if (!Pair::isPair(form.second, d_typeOffset)) {
+        throw bdld::Datum::createError(
+            -1,
+            "\"define\" form must be a proper list having three elements",
+            allocator());
+    }
+
+    const Pair& rest = Pair::access(form.second);
+    if (!rest.second.isNull()) {
+        throw bdld::Datum::createError(
+            -1,
+            "\"define\" form must be a proper list having three elements",
+            allocator());
+    }
+
+    bsl::pair<const bsl::string, bdld::Datum>* entry = environment.define(
+        name.theString(),
+        Builtins::toDatum(Builtins::e_UNDEFINED, d_typeOffset));
+    // TODO: Change 'Environment' to return 'pair<pair<...>*, bool>'.
+    // That will change this logic a bit, too.
+
+    const bdld::Datum value = evaluateExpression(rest.first, environment);
+
+    if (entry) {
+        // We successfully defined 'name' as 'undefined' earlier, so just
+        // update the value.
+        entry->second = value;
+    }
+    else {
+        // 'name' is already defined locally in 'environment', so now overwrite
+        // it with 'value'.
+        entry         = environment.lookup(name.theString());
+        entry->second = value;
+    }
+
+    return value;
 }
 
 bdld::Datum Interpreter::invokeNative(const bdld::DatumUdt& nativeProcedure,

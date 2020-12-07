@@ -46,6 +46,7 @@ class Interpreter {
     bdld::Datum evaluatePair(const Pair&, Environment&);
     bdld::Datum evaluateSymbol(const bdld::Datum&, Environment&);
     bdld::Datum evaluateLambda(const bdld::Datum&, Environment&);
+    bdld::Datum evaluateDefine(const bdld::Datum&, Environment&);
 
     bdld::Datum invokeNative(const bdld::DatumUdt& nativeProcedure,
                              const bdld::Datum&    tail,
