@@ -4,6 +4,8 @@
 #include <bdld_datum.h>
 #include <bsl_string.h>
 #include <bsl_vector.h>
+#include <bslma_usesbslmaallocator.h>
+#include <bslmf_nestedtraitdeclaration.h>
 #include <lspcore_userdefinedtypes.h>
 
 namespace BloombergLP {
@@ -43,6 +45,10 @@ struct Procedure {
     //     ((debug "x:" x "y:" y) (if (> x y) x y))
     //
     const Pair* body;
+
+    BSLMF_NESTED_TRAIT_DECLARATION(Procedure, bslma::UsesBslmaAllocator);
+
+    explicit Procedure(bslma::Allocator* = 0);
 
     static bool isProcedure(const bdld::Datum&, int typeOffset);
     static bool isProcedure(const bdld::DatumUdt&, int typeOffset);

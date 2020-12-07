@@ -3,6 +3,7 @@
 #include <bdld_datummapowningkeysbuilder.h>
 #include <bsl_cstddef.h>
 #include <bsl_sstream.h>
+#include <bslma_managedptr.h>
 #include <lspcore_builtins.h>
 #include <lspcore_interpreter.h>
 #include <lspcore_listutil.h>
@@ -261,7 +262,7 @@ bdld::Datum Interpreter::evaluateLambda(const bdld::Datum& tail,
     //
     // That is, 'tail' is a list with at least two elements.
     //
-    // The first element is the paramuments, and is one of: a symbol, a list of
+    // The first element is the parameters, and is one of: a symbol, a list of
     // symbols, or an improper list of symbols (where the 'rest-param' is bound
     // to a list).
     //
@@ -288,7 +289,12 @@ bdld::Datum Interpreter::evaluateLambda(const bdld::Datum& tail,
             -1, "λ expression must be a proper list", allocator());
     }
 
-    Procedure* procedure = new (*allocator()) Procedure;
+    // Use a 'ManagedPtr' so that if we throw an exception, the
+    // under-construction 'Procedure' is freed. This isn't necessary, since we
+    // will be using some form of garbage collection, but might as well
+    // generate less garbage when we can.
+    bslma::ManagedPtr<Procedure> procedure(
+        new (*allocator()) Procedure(allocator()), allocator());
 
     // Parse the parameters.
     if (SymbolUtil::isSymbol(parameters, d_typeOffset)) {
@@ -338,6 +344,7 @@ bdld::Datum Interpreter::evaluateLambda(const bdld::Datum& tail,
             allocator());
     }
 
+    // and finally the body
     if (!ListUtil::isProperList(body, d_typeOffset)) {
         throw bdld::Datum::createError(
             -1, "λ expression body must be a proper list", allocator());
@@ -345,7 +352,8 @@ bdld::Datum Interpreter::evaluateLambda(const bdld::Datum& tail,
     procedure->body = &Pair::access(body);
 
     return bdld::Datum::createUdt(
-        procedure, UserDefinedTypes::e_PROCEDURE + d_typeOffset);
+        procedure.release().first,  // the pointer
+        UserDefinedTypes::e_PROCEDURE + d_typeOffset);
 }
 
 bdld::Datum Interpreter::invokeNative(const bdld::DatumUdt& nativeProcedure,
