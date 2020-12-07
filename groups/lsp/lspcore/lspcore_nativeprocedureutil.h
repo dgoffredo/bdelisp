@@ -22,6 +22,21 @@ namespace bslma = BloombergLP::bslma;
 
 class Environment;
 
+// A native procedure is a C++ function that we can call from within the
+// interpreter. It's either a plain old function pointer, or a pointer to a
+// managed 'bsl::function' object. The plain old function pointer can fit
+// in the 'DatumUdt' 'data()' member, provided that function pointers and
+// data pointers are the same size. On platforms (are there any?) where
+// function pointers are larger, then we instead use a pointer to a function
+// pointer. For the 'bsl::function' case, we store a pointer to a
+// 'bsl::function'.
+//
+// These storage cases are distinguished from each other using the lowest
+// bit of the lowest byte of the 'DatumUdt' 'data()' member. If that bit is
+// set, then the pointer is a 'bsl::function*' (except for the low bit). If the
+// bit is unset, then the pointer is a function pointer, or a pointer to a
+// function pointer if a function pointer won't fit.
+
 class NativeProcedureUtil {
   public:
     typedef void(Signature)(
