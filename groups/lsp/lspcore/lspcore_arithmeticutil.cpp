@@ -100,7 +100,7 @@ void ArithmeticUtil::divide(bsl::vector<bdld::Datum>& argsAndOutput,
 
     bdldfp::Decimal64 result;
     if (argsAndOutput.size() == 1) {
-        result = -argsAndOutput[0].theDecimal64();
+        result = argsAndOutput[0].theDecimal64();
     }
     else {
         result = bsl::accumulate(argsAndOutput.begin() + 1,
