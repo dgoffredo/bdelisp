@@ -493,9 +493,10 @@ bdld::Datum Interpreter::invokeProcedure(const bdld::DatumUdt& procedure,
     // evaluated. Note that this might be the same as 'argsEnv', for a
     // recursive tail call where no lambdas were generated. Better escape
     // analysis might be added in the future.
-    const Procedure* proc     = &Procedure::access(procedure);
-    Environment* env = new (*allocator()) Environment(proc->environment, allocator());
-    bdld::Datum      restArgs = tail;
+    const Procedure* proc = &Procedure::access(procedure);
+    Environment*     env =
+        new (*allocator()) Environment(proc->environment, allocator());
+    bdld::Datum restArgs = tail;
     // TODO: change calling convention so stack can be shared in interpreter
     // (fewer allocations)
     bsl::vector<bdld::Datum> argStack;

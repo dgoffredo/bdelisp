@@ -9,11 +9,24 @@ namespace lspcore {
 namespace bdld  = BloombergLP::bdld;
 namespace bslma = BloombergLP::bslma;
 
-class Environment;
+// 'struct StringyHash' and 'struct StirngyEqualTo', below, are used in the
+// 'unordered_map' type within each 'Environment'. These helpers allow the
+// 'unordered_map' to store 'bsl::string' keys while allowing lookups using
+// 'bsl::string_view', without a temporary 'bsl::string' having to be
+// constructed for each lookup.
+
+struct StringyHash : public bsl::hash<bsl::string_view> {
+    typedef void is_transparent;
+};
+
+struct StringyEqualTo : public bsl::equal_to<bsl::string_view> {
+    typedef void is_transparent;
+};
 
 class Environment {
-    bsl::unordered_map<bsl::string, bdld::Datum> d_locals;
-    Environment*                                 d_parent_p;
+    bsl::unordered_map<bsl::string, bdld::Datum, StringyHash, StringyEqualTo>
+                 d_locals;
+    Environment* d_parent_p;
     // 'd_wasReferenced' is used by an optimization in the interpreter. When a
     // new environment is created that references this object as its parent, we
     // set 'd_wasReferenced = true'. Then when evaluating tail calls, the

@@ -22,17 +22,10 @@ Environment::Environment(Environment* parent, bslma::Allocator* allocator)
 
 const bsl::pair<const bsl::string, bdld::Datum>* Environment::lookup(
     bsl::string_view name) const {
-    // TODO: The call to 'find' would not compile with just 'name', I needed to
-    // wrap it in 'StringRef'. The error was that something wasn't
-    // transparent, and then no conversion from 'string_view' to 'const
-    // string&'. I'm guessing that the transparency is to allow looking up by a
-    // not-exactly-the-same-type, which is what I want, so I'm not sure what
-    // went wrong there. I suspect that this code is generating a 'string' on
-    // the fly with every lookup, which is bad. Look into this.
     const Environment* env = this;
     do {
         const bsl::unordered_map<bsl::string, bdld::Datum>::const_iterator
-            found = env->d_locals.find(bslstl::StringRef(name));
+            found = env->d_locals.find(name);
 
         if (found != env->d_locals.end()) {
             return &*found;
