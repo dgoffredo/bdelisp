@@ -3,6 +3,7 @@
 #include <bdld_datummapowningkeysbuilder.h>
 #include <bsl_cstddef.h>
 #include <bsl_sstream.h>
+#include <bsl_unordered_set.h>
 #include <bslma_managedptr.h>
 #include <lspcore_builtins.h>
 #include <lspcore_interpreter.h>
@@ -27,6 +28,7 @@ void defineDefaultGlobalEnvironment(Environment& environment, int typeOffset) {
     defineBuiltin(environment, Builtins::e_LAMBDA, typeOffset);
     defineBuiltin(environment, Builtins::e_DEFINE, typeOffset);
     defineBuiltin(environment, Builtins::e_SET, typeOffset);
+    defineBuiltin(environment, Builtins::e_IF, typeOffset);
     defineBuiltin(environment, Builtins::e_QUOTE, typeOffset);
 
     // alternative spellings
@@ -95,16 +97,20 @@ bdld::Datum Interpreter::evaluateExpression(const bdld::Datum& expression,
 
 int Interpreter::defineNativeProcedure(bsl::string_view name,
                                        NativeFunc*      function) {
-    return !d_globals.define(
-        name,
-        NativeProcedureUtil::create(function, d_typeOffset, allocator()));
+    return !d_globals
+                .define(name,
+                        NativeProcedureUtil::create(
+                            function, d_typeOffset, allocator()))
+                .second;
 }
 
 int Interpreter::defineNativeProcedure(
     bsl::string_view name, const bsl::function<NativeFunc>& function) {
-    return !d_globals.define(
-        name,
-        NativeProcedureUtil::create(function, d_typeOffset, allocator()));
+    return !d_globals
+                .define(name,
+                        NativeProcedureUtil::create(
+                            function, d_typeOffset, allocator()))
+                .second;
 }
 
 void Interpreter::collectGarbage() {
@@ -143,6 +149,47 @@ bdld::Datum Interpreter::evaluateIntMap(const bdld::DatumIntMapRef& map,
     return builder.commit();
 }
 
+namespace {
+
+// A form's 'Classification' tells the procedure evaluator whether it needs to
+// treat the form specially when it appears in tail position.
+enum Classification { e_OTHER, e_PROCEDURE_INVOCATION, e_IF };
+
+Classification classify(const bdld::Datum& form,
+                        const Environment& environment,
+                        int                typeOffset) {
+    if (!Pair::isPair(form, typeOffset)) {
+        return e_OTHER;
+    }
+
+    const Pair& pair = Pair::access(form);
+    if (!SymbolUtil::isSymbol(pair.first, typeOffset)) {
+        return e_OTHER;
+    }
+
+    const bdld::Datum name = SymbolUtil::access(pair.first);
+    const bsl::pair<const bsl::string, bdld::Datum>* const entry =
+        environment.lookup(name.theString());
+    // We could throw the "undefined identifier" exception here, but let's keep
+    // it neat and let the caller redo that work.
+    if (!entry) {
+        return e_OTHER;
+    }
+
+    if (Builtins::isBuiltin(entry->second, typeOffset) &&
+        Builtins::access(entry->second) == Builtins::e_IF) {
+        return e_IF;
+    }
+
+    if (Procedure::isProcedure(entry->second, typeOffset)) {
+        return e_PROCEDURE_INVOCATION;
+    }
+
+    return e_OTHER;
+}
+
+}  // namespace
+
 bdld::Datum Interpreter::evaluatePair(const Pair&  pair,
                                       Environment& environment) {
     const bdld::Datum head = evaluateExpression(pair.first, environment);
@@ -165,11 +212,7 @@ bdld::Datum Interpreter::evaluatePair(const Pair&  pair,
             // error.
             //
             if (Procedure::isProcedure(udt, d_typeOffset)) {
-                // TODO
-                throw bdld::Datum::createError(
-                    -1,
-                    "procedure invocation not yet implemented",
-                    allocator());
+                return invokeProcedure(udt, pair.second, environment);
             }
             if (NativeProcedureUtil::isNativeProcedure(udt, d_typeOffset)) {
                 // TODO: Could have it return a continuation in the future.
@@ -254,7 +297,7 @@ bdld::Datum Interpreter::evaluateSymbol(const bdld::Datum& asString,
 }
 
 bdld::Datum Interpreter::evaluateLambda(const bdld::Datum& tail,
-                                        Environment&) {
+                                        Environment&       environment) {
     // 'tail' is the lambda expression but without the leading 'lambda' or 'λ'
     // symbol. The form, in a syntax-rules like notation, is one of:
     //
@@ -291,6 +334,9 @@ bdld::Datum Interpreter::evaluateLambda(const bdld::Datum& tail,
             -1, "λ expression must be a proper list", allocator());
     }
 
+    // 'parameterNames' is used to avoid duplicates
+    bsl::unordered_set<bsl::string> parameterNames;
+
     // Use a 'ManagedPtr' so that if we throw an exception, the
     // under-construction 'Procedure' is freed. This isn't necessary, since we
     // will be using some form of garbage collection, but might as well
@@ -317,8 +363,14 @@ bdld::Datum Interpreter::evaluateLambda(const bdld::Datum& tail,
                     "λ expression parameters must all be symbols",
                     allocator());
             }
-            procedure->positionalParameters.push_back(
-                SymbolUtil::access(parameter).theString());
+            const bdld::Datum param = SymbolUtil::access(parameter);
+            if (!parameterNames.insert(param.theString()).second) {
+                bsl::ostringstream error;
+                error << "duplicate procedure parameter name: "
+                      << param.theString();
+                throw bdld::Datum::createError(-1, error.str(), allocator());
+            }
+            procedure->positionalParameters.push_back(param.theString());
 
             rest = pair.second;
         } while (Pair::isPair(rest, d_typeOffset));
@@ -335,7 +387,15 @@ bdld::Datum Interpreter::evaluateLambda(const bdld::Datum& tail,
                     "λ expression parameters must all be symbols",
                     allocator());
             }
-            procedure->restParameter = SymbolUtil::access(rest).theString();
+
+            const bdld::Datum param = SymbolUtil::access(rest);
+            if (!parameterNames.insert(param.theString()).second) {
+                bsl::ostringstream error;
+                error << "duplicate procedure parameter name: "
+                      << param.theString();
+                throw bdld::Datum::createError(-1, error.str(), allocator());
+            }
+            procedure->restParameter = param.theString();
         }
     }
     else {
@@ -351,7 +411,9 @@ bdld::Datum Interpreter::evaluateLambda(const bdld::Datum& tail,
         throw bdld::Datum::createError(
             -1, "λ expression body must be a proper list", allocator());
     }
-    procedure->body = &Pair::access(body);
+    procedure->body        = &Pair::access(body);
+    procedure->environment = &environment;
+    environment.markAsReferenced();
 
     return bdld::Datum::createUdt(
         procedure.release().first,  // the pointer
@@ -409,27 +471,240 @@ bdld::Datum Interpreter::evaluateDefine(const bdld::Datum& tail,
             allocator());
     }
 
-    bsl::pair<const bsl::string, bdld::Datum>* entry = environment.define(
-        name.theString(),
-        Builtins::toDatum(Builtins::e_UNDEFINED, d_typeOffset));
-    // TODO: Change 'Environment' to return 'pair<pair<...>*, bool>'.
-    // That will change this logic a bit, too.
+    bsl::pair<bsl::pair<const bsl::string, bdld::Datum>*, bool> entry =
+        environment.define(
+            name.theString(),
+            Builtins::toDatum(Builtins::e_UNDEFINED, d_typeOffset));
 
     const bdld::Datum value = evaluateExpression(rest.first, environment);
-
-    if (entry) {
-        // We successfully defined 'name' as 'undefined' earlier, so just
-        // update the value.
-        entry->second = value;
-    }
-    else {
-        // 'name' is already defined locally in 'environment', so now overwrite
-        // it with 'value'.
-        entry         = environment.lookup(name.theString());
-        entry->second = value;
-    }
-
+    entry.first->second     = value;
     return value;
+}
+
+bdld::Datum Interpreter::invokeProcedure(const bdld::DatumUdt& procedure,
+                                         const bdld::Datum&    tail,
+                                         Environment&          environment) {
+    BSLS_ASSERT(Procedure::isProcedure(procedure, d_typeOffset));
+
+    // 'argsEnv' is the environment in which the procedure's arguments are
+    // evaluated.
+    Environment* argsEnv = &environment;
+    // 'env' is the environment in which the body of the procedure is
+    // evaluated. Note that this might be the same as 'argsEnv', for a
+    // recursive tail call where no lambdas were generated. Better escape
+    // analysis might be added in the future.
+    Environment* env = new (*allocator()) Environment(argsEnv, allocator());
+    const Procedure* proc     = &Procedure::access(procedure);
+    bdld::Datum      restArgs = tail;
+    // TODO: change calling convention so stack can be shared in interpreter
+    // (fewer allocations)
+    bsl::vector<bdld::Datum> argStack;
+// We jump back to 'tailCall' when there's an invocation in tail position.
+// Before 'goto', the code will set up 'argsEnv', 'env', 'proc', 'restArgs',
+// and 'argStack' appropriately so that it's as if we called 'invokeProcedure'
+// again.
+tailCall:
+    if (!restArgs.isNull() && !Pair::isPair(restArgs, d_typeOffset)) {
+        throw bdld::Datum::createError(
+            -1,
+            "procedure invocation form must be a proper list",
+            allocator());
+    }
+
+    // Evaluate the procedure's arguments, placing them into 'argStack'. Once
+    // we've done that, we'll associate them with their names in 'env'.
+    int numArgs = 0;
+    for (bsl::vector<bsl::string>::const_iterator iter =
+             proc->positionalParameters.begin();
+         iter != proc->positionalParameters.end();
+         ++iter) {
+        if (restArgs.isNull()) {
+            throw bdld::Datum::createError(
+                -1, "not enough arguments passed to procedure", allocator());
+        }
+        if (!Pair::isPair(restArgs, d_typeOffset)) {
+            throw bdld::Datum::createError(
+                -1,
+                "procedure invocation form must be a proper list",
+                allocator());
+        }
+
+        const Pair& pair = Pair::access(restArgs);
+        argStack.push_back(evaluateExpression(pair.first, *argsEnv));
+        ++numArgs;
+        restArgs = pair.second;
+    }
+
+    // If the procedure has a 'rest' argument, e.g. "baz" in '(λ (foo bar .
+    // baz) ...)', then map all remaining 'restArgs' into a list of evaluated
+    // arguments and push the resulting list onto 'argStack'.
+    // We'll use 'argStack' temporarily to store the evaluated arguments before
+    // converting them into a list.
+    if (!proc->restParameter.empty()) {
+        const int restBeginIndex = numArgs;
+        while (Pair::isPair(restArgs, d_typeOffset)) {
+            const Pair& pair = Pair::access(restArgs);
+            argStack.push_back(evaluateExpression(pair.first, *argsEnv));
+            restArgs = pair.second;
+        }
+
+        if (!restArgs.isNull()) {
+            throw bdld::Datum::createError(
+                -1,
+                "procedure invocation form must be a proper list",
+                allocator());
+        }
+
+        const bdld::Datum restList =
+            ListUtil::createList(argStack.begin() + restBeginIndex,
+                                 argStack.end(),
+                                 d_typeOffset,
+                                 allocator());
+        // Note: The following three lines (commented out) are not necessary.
+        // We can instead put 'restList' directly into the procedure's
+        // environment, now that we're done evaluating arguments.
+        //
+        //     argStack.erase(argStack.begin() + restBeginIndex,
+        //     argStack.end()); argStack.push_back(restList);
+        //     ++numArgs;
+        env->defineOrRedefine(proc->restParameter, restList);
+    }
+
+    // Now bind the evaluated arguments from 'argStack' into the procedure's
+    // environment ('env').
+    for (bsl::size_t i = 0; i < proc->positionalParameters.size(); ++i) {
+        // e.g. if the third positional parameter is named "foo", bind the
+        // third evaluated argument from 'argStack' to the name "foo" in 'env'.
+        env->defineOrRedefine(proc->positionalParameters[i], argStack[i]);
+    }
+
+    // Evaluate each of the forms in 'proc->body'. Discard all results except
+    // for the last one.
+    //
+    // The last form is treated specially: if it's an 'if' form or a procedure
+    // invocation, then we defer evaluation in order to handle tail calls
+    // properly. If it's some other kind of form, then we just return the
+    // result of evaluating it.
+    const Pair* rest = proc->body;
+    // while we're not at the last form...
+    while (!rest->second.isNull()) {
+        (void)evaluateExpression(rest->first, *env);
+        // We can assume that 'rest.second' is a 'Pair', because 'env.body' is
+        // guarnateed by the 'lambda' evaluator to be a proper list.
+        rest = &Pair::access(rest->second);
+    }
+
+    // Now we're on the last form. Classify it as one of the following:
+    // - an 'if' statement
+    // - a procedure invocation
+    // - other
+    //
+    // If it's "other," then just evaluate it and return the value.
+    //
+    // If it's a procedure invocation, then reset the variables in this
+    // function and 'goto tailCall'.
+    //
+    // If it's an 'if' statement, then evaluate the predicate to decide which
+    // subform to evaluate. Then go around the following loop again. The idea
+    // is to traverse nested 'if' expressions that are in tail position, in
+    // order to get to the underlying value or tail call.
+    for (bdld::Datum form = rest->first;;) {
+        Classification classification =
+            classify(form, environment, d_typeOffset);
+        switch (classification) {
+            case e_OTHER:
+                return evaluateExpression(form, *env);
+            case e_IF: {
+                // An 'if' form has three arguments:
+                //
+                //     (if <predicate> <then> <else>)
+                //
+                // Evaluate the <predicate>. If it's '#f', then loop around
+                // using <else> as the 'form'. Otherwise, loop around using
+                // <then> as the form.
+                const Pair* ifTail = &Pair::access(form);
+                // TODO: refactor all of this 'if' form unpacking into a
+                // function that this can share with the non-tail-position 'if'
+                // handler.
+                if (!Pair::isPair(ifTail->second, d_typeOffset)) {
+                    throw bdld::Datum::createError(
+                        -1,
+                        "\"if\" form must have three arguments: <predicate> "
+                        "<then> <else>",
+                        allocator());
+                }
+                ifTail                       = &Pair::access(ifTail->second);
+                const bdld::Datum& predicate = ifTail->first;
+
+                if (!Pair::isPair(ifTail->second, d_typeOffset)) {
+                    throw bdld::Datum::createError(
+                        -1,
+                        "\"if\" form must have three arguments: <predicate> "
+                        "<then> <else>",
+                        allocator());
+                }
+                ifTail                      = &Pair::access(ifTail->second);
+                const bdld::Datum& thenForm = ifTail->first;
+
+                if (!Pair::isPair(ifTail->second, d_typeOffset)) {
+                    throw bdld::Datum::createError(
+                        -1,
+                        "\"if\" form must have three arguments: <predicate> "
+                        "<then> <else>",
+                        allocator());
+                }
+                ifTail                      = &Pair::access(ifTail->second);
+                const bdld::Datum& elseForm = ifTail->first;
+                if (!ifTail->second.isNull()) {
+                    throw bdld::Datum::createError(
+                        -1, "\"if\" form must be a proper list", allocator());
+                }
+
+                const bdld::Datum predicateResult =
+                    evaluateExpression(predicate, *env);
+                if (predicateResult == bdld::Datum::createBoolean(false)) {
+                    form = elseForm;
+                }
+                else {
+                    form = thenForm;
+                }
+                break;  // or, equivalently, 'continue'
+            }
+            default: {
+                BSLS_ASSERT(classification == e_PROCEDURE_INVOCATION);
+                // Here are the variables that we need to set up before 'goto
+                // tailCall':
+                //
+                // - 'Environment* argsEnv'
+                // - 'Environment* env'
+                // - 'const Procedure* proc'
+                // - 'bdld::Datum restArgs'
+                // - 'bsl::vector<bdld::Datum> argStack'
+                //
+                // Depending on whether 'env->wasReferenced()', we might be
+                // able to reuse 'env' as both 'argsEnv' and 'env'. Otherwise,
+                // 'env' will have to be a fresh 'Environment'.
+                //
+                // 'proc' will be the procedure that we're calling (extracted
+                // from 'form').
+                //
+                // 'restArgs' will be the tail of 'form'.
+                //
+                // 'argStack' will be cleared.
+                //
+                const Pair& invocation = Pair::access(form);
+                proc                   = &Procedure::access(
+                    evaluateExpression(invocation.first, *env));
+                restArgs = invocation.second;
+                argsEnv  = env;
+                if (env->wasReferenced()) {
+                    env = new (*allocator()) Environment(env, allocator());
+                }
+                argStack.clear();
+                goto tailCall;
+            }
+        }
+    }
 }
 
 bdld::Datum Interpreter::invokeNative(const bdld::DatumUdt& nativeProcedure,

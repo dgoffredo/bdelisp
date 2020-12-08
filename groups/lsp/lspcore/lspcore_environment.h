@@ -33,12 +33,17 @@ class Environment {
 
     // In the environment local to this object, create an entry having the
     // specified 'name' and the specified 'value' if one does not already exist
-    // in the local environment. Return a pointer to the created entry, or
-    // return null if an entry already exists with that name in the local
-    // environment. The local environment consists of those names stored within
-    // this object specifically, without considering the ancestors of this
-    // object.
-    bsl::pair<const bsl::string, bdld::Datum>* define(
+    // in the local environment. Return a pointer to the entry, and a 'bool'
+    // indicating whether the entry was inserted (as opposed to already having
+    // been present). The local environment consists of those names stored
+    // within this object specifically, without considering the ancestors of
+    // this object.
+    bsl::pair<bsl::pair<const bsl::string, bdld::Datum>*, bool> define(
+        bsl::string_view name, const bdld::Datum& value);
+
+    // Call 'define', but additionally modify the local binding if it already
+    // exists. Return a pointer to the relevant entry.
+    bsl::pair<const bsl::string, bdld::Datum>* defineOrRedefine(
         bsl::string_view name, const bdld::Datum& value);
 
     // Return whether this object has ever been the parent of another

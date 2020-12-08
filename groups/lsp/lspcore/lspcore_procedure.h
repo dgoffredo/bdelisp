@@ -18,6 +18,7 @@ namespace lspcore {
 namespace bdld  = BloombergLP::bdld;
 namespace bslma = BloombergLP::bslma;
 
+class Environment;
 class Pair;
 
 struct Procedure {
@@ -45,6 +46,10 @@ struct Procedure {
     //     ((debug "x:" x "y:" y) (if (> x y) x y))
     //
     const Pair* body;
+
+    // 'environment' contains the lexical environment surrounding the
+    // definition of the procedure.
+    Environment* environment;
 
     BSLMF_NESTED_TRAIT_DECLARATION(Procedure, bslma::UsesBslmaAllocator);
 

@@ -14,6 +14,11 @@ bool Builtins::isBuiltin(const bdld::DatumUdt& udt, int typeOffset) {
     return udt.type() - typeOffset == UserDefinedTypes::e_BUILTIN;
 }
 
+Builtins::Builtin Builtins::access(const bdld::Datum& datum) {
+    BSLS_ASSERT(datum.isUdt());
+    return fromUdtData(datum.theUdt().data());
+}
+
 Builtins::Builtin Builtins::fromUdtData(void* udtData) {
     const bsl::intptr_t asInt = reinterpret_cast<bsl::intptr_t>(udtData);
 

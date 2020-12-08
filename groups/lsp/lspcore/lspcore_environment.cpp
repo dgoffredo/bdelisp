@@ -48,7 +48,19 @@ bsl::pair<const bsl::string, bdld::Datum>* Environment::lookup(
         static_cast<const Environment*>(this)->lookup(name));
 }
 
-bsl::pair<const bsl::string, bdld::Datum>* Environment::define(
+bsl::pair<bsl::pair<const bsl::string, bdld::Datum>*, bool>
+Environment::define(bsl::string_view name, const bdld::Datum& value) {
+    typedef bsl::pair<bsl::unordered_map<bsl::string, bdld::Datum>::iterator,
+                      bool>
+        InsertResult;
+
+    const InsertResult result = d_locals.insert(
+        bsl::pair<const bsl::string, bdld::Datum>(name, value));
+
+    return bsl::make_pair(&*result.first, result.second);
+}
+
+bsl::pair<const bsl::string, bdld::Datum>* Environment::defineOrRedefine(
     bsl::string_view name, const bdld::Datum& value) {
     typedef bsl::pair<bsl::unordered_map<bsl::string, bdld::Datum>::iterator,
                       bool>
@@ -57,13 +69,12 @@ bsl::pair<const bsl::string, bdld::Datum>* Environment::define(
     const InsertResult result = d_locals.insert(
         bsl::pair<const bsl::string, bdld::Datum>(name, value));
 
-    if (result.second) {
-        // inserted it
-        return &*result.first;
+    if (!result.second) {
+        // There's already an entry at 'name'. Give it a new 'value'.
+        result.first->second = value;
     }
 
-    // it was already there
-    return 0;
+    return &*result.first;
 }
 
 }  // namespace lspcore
