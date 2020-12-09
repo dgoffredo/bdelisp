@@ -15,7 +15,7 @@ Environment::Environment(bslma::Allocator* allocator)
 Environment::Environment(Environment* parent, bslma::Allocator* allocator)
 : d_locals(allocator)
 , d_parent_p(parent)
-, d_wasReferenced(true) {
+, d_wasReferenced(false) {
     BSLS_ASSERT(parent);
     parent->markAsReferenced();
 }
