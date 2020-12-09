@@ -471,6 +471,8 @@ bdld::Datum Interpreter::evaluateDefine(const bdld::Datum& tail,
             allocator());
     }
 
+    // First add the name to the environment, so that the value to which it's
+    // bound has access to itself (if it happens to know its name).
     bsl::pair<bsl::pair<const bsl::string, bdld::Datum>*, bool> entry =
         environment.define(
             name.theString(),
@@ -538,7 +540,7 @@ tailCall:
 
     // If the procedure has a 'rest' argument, e.g. "baz" in '(λ (foo bar .
     // baz) ...)', then map all remaining 'restArgs' into a list of evaluated
-    // arguments and push the resulting list onto 'argStack'.
+    // arguments.
     // We'll use 'argStack' temporarily to store the evaluated arguments before
     // converting them into a list.
     if (!proc->restParameter.empty()) {
@@ -591,7 +593,7 @@ tailCall:
     while (!rest->second.isNull()) {
         (void)evaluateExpression(rest->first, *env);
         // We can assume that 'rest.second' is a 'Pair', because 'env.body' is
-        // guarnateed by the 'lambda' evaluator to be a proper list.
+        // guaranteed by the 'lambda' evaluator to be a proper list.
         rest = &Pair::access(rest->second);
     }
 
@@ -603,7 +605,7 @@ tailCall:
     // If it's "other," then just evaluate it and return the value.
     //
     // If it's a procedure invocation, then reset the variables in this
-    // function and 'goto tailCall'.
+    // function, and then 'goto tailCall'.
     //
     // If it's an 'if' statement, then evaluate the predicate to decide which
     // subform to evaluate. Then go around the following loop again. The idea
@@ -699,7 +701,7 @@ tailCall:
                 restArgs = invocation.second;
                 argsEnv  = env;
                 if (env->wasReferenced()) {
-                    env = new (*allocator()) Environment(env, allocator());
+                    env = new (*allocator()) Environment(&environment, allocator());
                 }
                 argStack.clear();
                 goto tailCall;
