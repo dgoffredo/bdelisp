@@ -125,7 +125,7 @@ void PrintVisitor::operator()(const bdld::DatumUdt& value) {
         case UserDefinedTypes::e_PAIR:
             return printList(Pair::access(value));
         case UserDefinedTypes::e_SYMBOL:
-            return printSymbol(SymbolUtil::access(value));
+            return printSymbol(SymbolUtil::name(value));
         case UserDefinedTypes::e_BUILTIN:
             // can't user 'printSymbol' because there's no 'bdld::Datum'
             // string. That's fine, because we don't need it -- builtin names

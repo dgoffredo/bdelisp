@@ -4,14 +4,16 @@
 #include <bdld_datum.h>
 #include <bsl_string_view.h>
 #include <bsl_unordered_map.h>
+#include <bsl_utility.h>
+#include <bsl_vector.h>
 
 namespace lspcore {
 namespace bdld  = BloombergLP::bdld;
 namespace bslma = BloombergLP::bslma;
 
-// 'struct StringyHash' and 'struct StirngyEqualTo', below, are used in the
+// 'struct StringyHash' and 'struct StringyEqualTo', below, are used in the
 // 'unordered_map' type within each 'Environment'. These helpers allow the
-// 'unordered_map' to store 'bsl::string' keys while allowing lookups using
+// 'unordered_map' to store 'bsl::string' keys while supporting lookups using
 // 'bsl::string_view', without a temporary 'bsl::string' having to be
 // constructed for each lookup.
 
@@ -24,9 +26,13 @@ struct StringyEqualTo : public bsl::equal_to<bsl::string_view> {
 };
 
 class Environment {
+    bsl::vector<bsl::pair<const bsl::string, bdld::Datum>*> d_arguments;
+
     bsl::unordered_map<bsl::string, bdld::Datum, StringyHash, StringyEqualTo>
-                 d_locals;
+        d_locals;
+
     Environment* d_parent_p;
+
     // 'd_wasReferenced' is used by an optimization in the interpreter. When a
     // new environment is created that references this object as its parent, we
     // set 'd_wasReferenced = true'. Then when evaluating tail calls, the
@@ -44,6 +50,10 @@ class Environment {
     const bsl::pair<const bsl::string, bdld::Datum>* lookup(
         bsl::string_view name) const;
 
+    bsl::vector<bsl::pair<const bsl::string, bdld::Datum>*>&       arguments();
+    const bsl::vector<bsl::pair<const bsl::string, bdld::Datum>*>& arguments()
+        const;
+
     // In the environment local to this object, create an entry having the
     // specified 'name' and the specified 'value' if one does not already exist
     // in the local environment. Return a pointer to the entry, and a 'bool'
@@ -58,6 +68,9 @@ class Environment {
     // exists. Return a pointer to the relevant entry.
     bsl::pair<const bsl::string, bdld::Datum>* defineOrRedefine(
         bsl::string_view name, const bdld::Datum& value);
+
+    // Remove all local entries from this environment.
+    void clearLocals();
 
     // Return whether this object has ever been the parent of another
     // environment.
@@ -78,6 +91,16 @@ inline bool Environment::wasReferenced() const {
 
 inline void Environment::markAsReferenced() {
     d_wasReferenced = true;
+}
+
+inline bsl::vector<bsl::pair<const bsl::string, bdld::Datum>*>&
+Environment::arguments() {
+    return d_arguments;
+}
+
+inline const bsl::vector<bsl::pair<const bsl::string, bdld::Datum>*>&
+Environment::arguments() const {
+    return d_arguments;
 }
 
 }  // namespace lspcore

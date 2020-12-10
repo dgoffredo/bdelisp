@@ -188,7 +188,7 @@ int lexer() {
                 token.text, 0, bslma::Default::allocator());
             bsl::cout << "The symbol UDT: " << symbol << "\n"
                       << "The symbol string: "
-                      << lspcore::SymbolUtil::access(symbol) << "\n";
+                      << lspcore::SymbolUtil::name(symbol) << "\n";
         }
         else if (token.kind != lspcore::LexerToken::e_WHITESPACE) {
             bsl::cout << token << "\n";

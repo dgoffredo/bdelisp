@@ -75,8 +75,7 @@ bdld::Datum Interpreter::evaluateExpression(const bdld::Datum& expression,
                 case UserDefinedTypes::e_PAIR:
                     return evaluatePair(Pair::access(expression), environment);
                 case UserDefinedTypes::e_SYMBOL:
-                    return evaluateSymbol(SymbolUtil::access(expression),
-                                          environment);
+                    return evaluateSymbol(expression, environment);
                 default:
                     return expression;
             }
@@ -167,7 +166,7 @@ Classification classify(const bdld::Datum& form,
         return e_OTHER;
     }
 
-    const bdld::Datum name = SymbolUtil::access(pair.first);
+    const bdld::Datum name = SymbolUtil::name(pair.first);
     const bsl::pair<const bsl::string, bdld::Datum>* const entry =
         environment.lookup(name.theString());
     // We could throw the "undefined identifier" exception here, but let's keep
@@ -266,16 +265,15 @@ bdld::Datum Interpreter::evaluatePair(const Pair&  pair,
         -1, "list evaluation not implemented", allocator());
 }
 
-bdld::Datum Interpreter::evaluateSymbol(const bdld::Datum& asString,
+bdld::Datum Interpreter::evaluateSymbol(const bdld::Datum& symbol,
                                         Environment&       environment) {
-    const bsl::string_view name = asString.theString();
-
+    const bdld::Datum name = SymbolUtil::name(symbol);
     const bsl::pair<const bsl::string, bdld::Datum>* const entry =
-        environment.lookup(name);
+        SymbolUtil::resolve(symbol, environment);
 
     if (!entry) {
         bsl::ostringstream error;
-        error << "unbound variable: " << name;
+        error << "unbound variable: " << name.theString();
         throw bdld::Datum::createError(-1, error.str(), allocator());
     }
 
@@ -289,7 +287,8 @@ bdld::Datum Interpreter::evaluateSymbol(const bdld::Datum& asString,
         // Even though 'bar' is visible to the definition of 'foo', but 'bar'
         // has not yet received a value, so this is still an error.
         bsl::ostringstream error;
-        error << "variable referenced before it was defined: " << name;
+        error << "variable referenced before it was defined: "
+              << name.theString();
         throw bdld::Datum::createError(-1, error.str(), allocator());
     }
 
@@ -346,7 +345,7 @@ bdld::Datum Interpreter::evaluateLambda(const bdld::Datum& tail,
 
     // Parse the parameters.
     if (SymbolUtil::isSymbol(parameters, d_typeOffset)) {
-        procedure->restParameter = SymbolUtil::access(parameters).theString();
+        procedure->restParameter = SymbolUtil::name(parameters).theString();
     }
     else if (parameters.isNull()) {
         // no positional parameters, and no rest parameter
@@ -363,7 +362,7 @@ bdld::Datum Interpreter::evaluateLambda(const bdld::Datum& tail,
                     "λ expression parameters must all be symbols",
                     allocator());
             }
-            const bdld::Datum param = SymbolUtil::access(parameter);
+            const bdld::Datum param = SymbolUtil::name(parameter);
             if (!parameterNames.insert(param.theString()).second) {
                 bsl::ostringstream error;
                 error << "duplicate procedure parameter name: "
@@ -388,7 +387,7 @@ bdld::Datum Interpreter::evaluateLambda(const bdld::Datum& tail,
                     allocator());
             }
 
-            const bdld::Datum param = SymbolUtil::access(rest);
+            const bdld::Datum param = SymbolUtil::name(rest);
             if (!parameterNames.insert(param.theString()).second) {
                 bsl::ostringstream error;
                 error << "duplicate procedure parameter name: "
@@ -454,7 +453,7 @@ bdld::Datum Interpreter::evaluateDefine(const bdld::Datum& tail,
                                        "be a symbol naming the value",
                                        allocator());
     }
-    name = SymbolUtil::access(name);
+    name = SymbolUtil::name(name);
 
     if (!Pair::isPair(form.second, d_typeOffset)) {
         throw bdld::Datum::createError(
@@ -563,15 +562,15 @@ tailCall:
                                  argStack.end(),
                                  d_typeOffset,
                                  allocator());
-        // Note: The following three lines (commented out) are not necessary.
-        // We can instead put 'restList' directly into the procedure's
-        // environment, now that we're done evaluating arguments.
-        //
-        //     argStack.erase(argStack.begin() + restBeginIndex,
-        //     argStack.end()); argStack.push_back(restList);
-        //     ++numArgs;
-        env->defineOrRedefine(proc->restParameter, restList);
+
+        argStack.erase(argStack.begin() + restBeginIndex, argStack.end());
+        argStack.push_back(restList);
+        ++numArgs;
     }
+
+    // Now clear the 'env', before adding the parameter bindings. 'env' might
+    // have been recycled from a tail call.
+    env->clearLocals();
 
     // Now bind the evaluated arguments from 'argStack' into the procedure's
     // environment ('env').
@@ -579,6 +578,10 @@ tailCall:
         // e.g. if the third positional parameter is named "foo", bind the
         // third evaluated argument from 'argStack' to the name "foo" in 'env'.
         env->defineOrRedefine(proc->positionalParameters[i], argStack[i]);
+    }
+
+    if (!proc->restParameter.empty()) {
+        env->defineOrRedefine(proc->restParameter, argStack.back());
     }
 
     // Evaluate each of the forms in 'proc->body'. Discard all results except
@@ -701,7 +704,8 @@ tailCall:
                 restArgs = invocation.second;
                 argsEnv  = env;
                 if (env->wasReferenced()) {
-                    env = new (*allocator()) Environment(&environment, allocator());
+                    env = new (*allocator())
+                        Environment(&environment, allocator());
                 }
                 argStack.clear();
                 goto tailCall;

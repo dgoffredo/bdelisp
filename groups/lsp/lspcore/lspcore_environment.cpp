@@ -70,4 +70,8 @@ bsl::pair<const bsl::string, bdld::Datum>* Environment::defineOrRedefine(
     return &*result.first;
 }
 
+void Environment::clearLocals() {
+    d_locals.clear();
+}
+
 }  // namespace lspcore
