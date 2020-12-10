@@ -64,6 +64,11 @@ struct SymbolUtil {
     static bool isSymbol(const bdld::Datum& datum, int typeOffset);
     static bool isSymbol(const bdld::DatumUdt& datum, int typeOffset);
 
+    // Return whether the specified 'datum' is a symbol encoded as a pointer to
+    // an environment entry. The behavior is undefined unless 'datum' is a
+    // symbol.
+    static bool isResolved(const bdld::Datum& datum);
+
   private:
     enum Encoding { e_DATUM_PTR, e_IN_PLACE, e_ENTRY_PTR, e_ARGUMENTS_OFFSET };
 
@@ -94,6 +99,12 @@ inline bool SymbolUtil::isSymbol(const bdld::Datum& datum, int typeOffset) {
 
 inline bool SymbolUtil::isSymbol(const bdld::DatumUdt& udt, int typeOffset) {
     return udt.type() == UserDefinedTypes::e_SYMBOL + typeOffset;
+}
+
+inline bool SymbolUtil::isResolved(const bdld::Datum& datum) {
+    BSLS_ASSERT(datum.isUdt());
+
+    return encoding(datum.theUdt().data()) == e_ENTRY_PTR;
 }
 
 // Symbols have four different representations:

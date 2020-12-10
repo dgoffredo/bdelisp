@@ -554,7 +554,8 @@ bdld::Datum Interpreter::partiallyResolvePair(
     if (Builtins::isBuiltin(head, d_typeOffset)) {
         headBuiltin = Builtins::access(head);
     }
-    else if (SymbolUtil::isSymbol(head, d_typeOffset)) {
+    else if (SymbolUtil::isSymbol(head, d_typeOffset) &&
+             SymbolUtil::isResolved(head)) {
         const bsl::pair<const bsl::string, bdld::Datum>* entry =
             SymbolUtil::resolve(head, environment);
         if (entry && Builtins::isBuiltin(entry->second, d_typeOffset)) {
@@ -953,20 +954,18 @@ bdld::Datum Interpreter::invokeArray(const bdld::DatumArrayRef& array,
     // an integer64.
 
     if (!Pair::isPair(form.second, d_typeOffset)) {
-        bsl::ostringstream error;
-        error << "array invocation form must be a proper list of two "
-                 "elements, not: ";
-        PrintUtil::print(error, form, d_typeOffset);
-        throw bdld::Datum::createError(-1, error.str(), allocator());
+        throw bdld::Datum::createError(
+            -1,
+            "array invocation form must be a proper list of two elements",
+            allocator());
     }
 
     const Pair& tail = Pair::access(form.second);
     if (!tail.second.isNull()) {
-        bsl::ostringstream error;
-        error << "array invocation form must be a proper list of two "
-                 "elements, not: ";
-        PrintUtil::print(error, form, d_typeOffset);
-        throw bdld::Datum::createError(-1, error.str(), allocator());
+        throw bdld::Datum::createError(
+            -1,
+            "array invocation form must be a proper list of two elements",
+            allocator());
     }
 
     const bdld::Datum indexDatum = evaluateExpression(tail.first, environment);
@@ -984,8 +983,7 @@ bdld::Datum Interpreter::invokeArray(const bdld::DatumArrayRef& array,
                                          : indexDatum.theInteger64();
     if (index < 0 || index >= bsls::Types::Int64(array.length())) {
         bsl::ostringstream error;
-        error << "array index out of range (" << index << ") in form: ";
-        PrintUtil::print(error, form, d_typeOffset);
+        error << "array index out of range (" << index << ")";
         throw bdld::Datum::createError(-1, error.str(), allocator());
     }
 
