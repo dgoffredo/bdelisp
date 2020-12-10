@@ -577,11 +577,13 @@ tailCall:
     for (bsl::size_t i = 0; i < proc->positionalParameters.size(); ++i) {
         // e.g. if the third positional parameter is named "foo", bind the
         // third evaluated argument from 'argStack' to the name "foo" in 'env'.
-        env->defineOrRedefine(proc->positionalParameters[i], argStack[i]);
+        env->arguments().push_back(
+            env->defineOrRedefine(proc->positionalParameters[i], argStack[i]));
     }
 
     if (!proc->restParameter.empty()) {
-        env->defineOrRedefine(proc->restParameter, argStack.back());
+        env->arguments().push_back(
+            env->defineOrRedefine(proc->restParameter, argStack.back()));
     }
 
     // Evaluate each of the forms in 'proc->body'. Discard all results except

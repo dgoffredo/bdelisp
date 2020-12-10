@@ -7,13 +7,15 @@ using namespace BloombergLP;
 namespace lspcore {
 
 Environment::Environment(bslma::Allocator* allocator)
-: d_locals(allocator)
+: d_arguments(allocator)
+, d_locals(allocator)
 , d_parent_p(0)
 , d_wasReferenced(false) {
 }
 
 Environment::Environment(Environment* parent, bslma::Allocator* allocator)
-: d_locals(allocator)
+: d_arguments(allocator)
+, d_locals(allocator)
 , d_parent_p(parent)
 , d_wasReferenced(false) {
     BSLS_ASSERT(parent);
@@ -71,6 +73,7 @@ bsl::pair<const bsl::string, bdld::Datum>* Environment::defineOrRedefine(
 }
 
 void Environment::clearLocals() {
+    d_arguments.clear();
     d_locals.clear();
 }
 
