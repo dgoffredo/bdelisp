@@ -14,6 +14,7 @@
 #include <bdlt_time.h>
 #include <bsl_ostream.h>
 #include <bsl_string_view.h>
+#include <bsl_vector.h>
 #include <bsls_assert.h>
 #include <lspcore_builtins.h>
 #include <lspcore_pair.h>
@@ -31,8 +32,9 @@ namespace {
 const int k_NO_PARENTHESES = 1;
 
 class PrintVisitor {
-    bsl::ostream& stream;
-    int           typeOffset;
+    bsl::ostream&                 stream;
+    int                           typeOffset;
+    bsl::vector<const Procedure*> procedureStack;
 
   public:
     explicit PrintVisitor(bsl::ostream& stream, int typeOffset)
@@ -58,7 +60,7 @@ class PrintVisitor {
     void operator()(const bdld::DatumBinaryRef&);
     void operator()(bdldfp::Decimal64);
     void printList(const Pair&, int flags = 0);
-    void printSymbol(const bdld::Datum&);
+    void printSymbol(const bdld::DatumUdt&);
     template <typename MapRef, typename Entry>
     void printMap(const MapRef&);
     void printPointer(const void*);
@@ -125,7 +127,7 @@ void PrintVisitor::operator()(const bdld::DatumUdt& value) {
         case UserDefinedTypes::e_PAIR:
             return printList(Pair::access(value));
         case UserDefinedTypes::e_SYMBOL:
-            return printSymbol(SymbolUtil::name(value));
+            return printSymbol(value);
         case UserDefinedTypes::e_BUILTIN:
             // can't user 'printSymbol' because there's no 'bdld::Datum'
             // string. That's fine, because we don't need it -- builtin names
@@ -230,10 +232,15 @@ void PrintVisitor::printList(const Pair& pair, int flags) {
     }
 }
 
-void PrintVisitor::printSymbol(const bdld::Datum& value) {
-    BSLS_ASSERT(value.isString());
+void PrintVisitor::printSymbol(const bdld::DatumUdt& value) {
+    BSLS_ASSERT(SymbolUtil::isSymbol(value, typeOffset));
 
-    stream << value.theString();
+    if (!procedureStack.empty()) {
+        stream << SymbolUtil::name(value, *procedureStack.back()).theString();
+    }
+    else {
+        stream << SymbolUtil::name(value).theString();
+    }
 }
 
 void PrintVisitor::printPointer(const void* value) {
@@ -281,7 +288,9 @@ void PrintVisitor::printProcedure(const Procedure& value) {
     }
 
     stream << " ";
+    procedureStack.push_back(&value);
     printList(*value.body, k_NO_PARENTHESES);
+    procedureStack.pop_back();
     stream << "]";
 }
 

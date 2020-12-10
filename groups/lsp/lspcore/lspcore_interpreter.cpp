@@ -168,10 +168,8 @@ Classification classify(const bdld::Datum& form,
         return e_OTHER;
     }
 
-    // TODO: This will have to change
-    const bdld::Datum name = SymbolUtil::name(pair.first);
     const bsl::pair<const bsl::string, bdld::Datum>* const entry =
-        environment.lookup(name.theString());
+        SymbolUtil::resolve(pair.first, environment);
     // We could throw the "undefined identifier" exception here, but let's keep
     // it neat and let the caller redo that work.
     if (!entry) {
@@ -271,11 +269,11 @@ bdld::Datum Interpreter::evaluatePair(const Pair&  pair,
 
 bdld::Datum Interpreter::evaluateSymbol(const bdld::Datum& symbol,
                                         Environment&       environment) {
-    const bdld::Datum name = SymbolUtil::name(symbol);
     const bsl::pair<const bsl::string, bdld::Datum>* const entry =
         SymbolUtil::resolve(symbol, environment);
 
     if (!entry) {
+        const bdld::Datum  name = SymbolUtil::name(symbol);
         bsl::ostringstream error;
         error << "unbound variable: " << name.theString();
         throw bdld::Datum::createError(-1, error.str(), allocator());
@@ -291,8 +289,7 @@ bdld::Datum Interpreter::evaluateSymbol(const bdld::Datum& symbol,
         // Even though 'bar' is visible to the definition of 'foo', but 'bar'
         // has not yet received a value, so this is still an error.
         bsl::ostringstream error;
-        error << "variable referenced before it was defined: "
-              << name.theString();
+        error << "variable referenced before it was defined: " << entry->first;
         throw bdld::Datum::createError(-1, error.str(), allocator());
     }
 
@@ -414,9 +411,15 @@ bdld::Datum Interpreter::evaluateLambda(const bdld::Datum& tail,
         throw bdld::Datum::createError(
             -1, "λ expression body must be a proper list", allocator());
     }
-    // TODO: transform the body into one with symbols resolved as much as
-    // possible.
-    procedure->body = &Pair::access(body);
+
+    // Transform the λ body into one with symbols resolved as much as possible.
+    // For example, we don't want to have to look up what "if" is every time we
+    // execute the procedure.
+    procedure->body =
+        &Pair::access(partiallyResolve(body,
+                                       procedure->positionalParameters,
+                                       procedure->restParameter,
+                                       environment));
 
     procedure->environment = &environment;
     environment.markAsReferenced();
@@ -424,6 +427,178 @@ bdld::Datum Interpreter::evaluateLambda(const bdld::Datum& tail,
     return bdld::Datum::createUdt(
         procedure.release().first,  // the pointer
         UserDefinedTypes::e_PROCEDURE + d_typeOffset);
+}
+
+bdld::Datum Interpreter::partiallyResolve(
+    const bdld::Datum&              form,
+    const bsl::vector<bsl::string>& positionalParameters,
+    const bsl::string&              restParameter,
+    const Environment&              environment) {
+    switch (form.type()) {
+        case bdld::Datum::e_NIL:
+        case bdld::Datum::e_INTEGER:
+        case bdld::Datum::e_DOUBLE:
+        case bdld::Datum::e_STRING:
+        case bdld::Datum::e_BOOLEAN:
+        case bdld::Datum::e_ERROR:
+        case bdld::Datum::e_DATE:
+        case bdld::Datum::e_TIME:
+        case bdld::Datum::e_DATETIME:
+        case bdld::Datum::e_DATETIME_INTERVAL:
+        case bdld::Datum::e_INTEGER64:
+        case bdld::Datum::e_BINARY:
+        case bdld::Datum::e_DECIMAL64:
+            return form;
+        case bdld::Datum::e_ARRAY: {
+            const bdld::DatumArrayRef array = form.theArray();
+            bdld::DatumArrayBuilder   builder(allocator());
+            for (bsl::size_t i = 0; i < array.length(); ++i) {
+                builder.pushBack(partiallyResolve(array[i],
+                                                  positionalParameters,
+                                                  restParameter,
+                                                  environment));
+            }
+            return builder.commit();
+        }
+        case bdld::Datum::e_MAP: {
+            const bdld::DatumMapRef         map = form.theMap();
+            bdld::DatumMapOwningKeysBuilder builder(allocator());
+            for (bsl::size_t i = 0; i < map.size(); ++i) {
+                builder.pushBack(map[i].key(),
+                                 partiallyResolve(map[i].value(),
+                                                  positionalParameters,
+                                                  restParameter,
+                                                  environment));
+            }
+            return builder.commit();
+        }
+        case bdld::Datum::e_INT_MAP: {
+            const bdld::DatumIntMapRef map = form.theIntMap();
+            bdld::DatumIntMapBuilder   builder(allocator());
+            for (bsl::size_t i = 0; i < map.size(); ++i) {
+                builder.pushBack(map[i].key(),
+                                 partiallyResolve(map[i].value(),
+                                                  positionalParameters,
+                                                  restParameter,
+                                                  environment));
+            }
+            return builder.commit();
+        }
+        default:
+            BSLS_ASSERT(form.type() == bdld::Datum::e_USERDEFINED);
+
+            switch (form.theUdt().type() - d_typeOffset) {
+                case UserDefinedTypes::e_PAIR:
+                    return partiallyResolvePair(form,
+                                                positionalParameters,
+                                                restParameter,
+                                                environment);
+                case UserDefinedTypes::e_SYMBOL:
+                    return partiallyResolveSymbol(form,
+                                                  positionalParameters,
+                                                  restParameter,
+                                                  environment);
+                default:
+                    break;
+            }
+    }
+
+    return form;
+}
+
+bdld::Datum Interpreter::partiallyResolveSymbol(
+    const bdld::Datum&              symbol,
+    const bsl::vector<bsl::string>& positionalParameters,
+    const bsl::string&              restParameter,
+    const Environment&              environment) {
+    BSLS_ASSERT(SymbolUtil::isSymbol(symbol, d_typeOffset));
+
+    const bdld::Datum      nameDatum = SymbolUtil::name(symbol);
+    const bsl::string_view name      = nameDatum.theString();
+    bsl::size_t            i         = 0;
+    // Linear lookup... it's fine, though, because how many parameters does a
+    // procedure really have?
+    for (; i < positionalParameters.size(); ++i) {
+        if (name == positionalParameters[i]) {
+            return SymbolUtil::create(i, d_typeOffset);
+        }
+    }
+
+    if (!restParameter.empty() && name == restParameter) {
+        return SymbolUtil::create(i, d_typeOffset);
+    }
+
+    const bsl::pair<const bsl::string, bdld::Datum>* entry =
+        SymbolUtil::resolve(symbol, environment);
+    if (entry) {
+        return SymbolUtil::create(*entry, d_typeOffset);
+    }
+
+    return symbol;
+}
+
+bdld::Datum Interpreter::partiallyResolvePair(
+    const bdld::Datum&              pairDatum,
+    const bsl::vector<bsl::string>& positionalParameters,
+    const bsl::string&              restParameter,
+    const Environment&              environment) {
+    const Pair&       pair = Pair::access(pairDatum);
+    const bdld::Datum head = partiallyResolve(
+        pair.first, positionalParameters, restParameter, environment);
+    // In the general case, we just "map" 'partiallyResolve' over the
+    // (proper/improper) list. If the 'head' is a builtin, though, then there
+    // are some special cases.
+    bool skipFirstArgument = false;
+    if (Builtins::isBuiltin(head, d_typeOffset)) {
+        switch (Builtins::access(head)) {
+            case Builtins::e_LAMBDA:
+            case Builtins::e_QUOTE:
+                // skip these forms
+                return pairDatum;
+            case Builtins::e_DEFINE:
+            case Builtins::e_SET:
+                // (set/define name value)
+                // resolve only the 'value'
+                skipFirstArgument = true;
+                break;
+            case Builtins::e_IF:
+            case Builtins::e_UNDEFINED:
+                break;
+        }
+    }
+
+    bsl::vector<bdld::Datum> items;
+    items.push_back(head);
+    bdld::Datum tail = pair.second;
+
+    if (skipFirstArgument) {
+        if (!Pair::isPair(tail, d_typeOffset)) {
+            bsl::ostringstream error;
+            error << "expected argument for builtin in form: ";
+            PrintUtil::print(error, pairDatum, d_typeOffset);
+            throw bdld::Datum::createError(-1, error.str(), allocator());
+        }
+
+        const Pair& pair = Pair::access(tail);
+        items.push_back(pair.first);
+        tail = pair.second;
+    }
+
+    while (Pair::isPair(tail, d_typeOffset)) {
+        const Pair& pair = Pair::access(tail);
+        items.push_back(partiallyResolve(
+            pair.first, positionalParameters, restParameter, environment));
+        tail = pair.second;
+    }
+
+    if (!tail.isNull()) {
+        bsl::ostringstream error;
+        error << "expected improper list: ";
+        PrintUtil::print(error, pairDatum, d_typeOffset);
+        throw bdld::Datum::createError(-1, error.str(), allocator());
+    }
+
+    return ListUtil::createList(items, d_typeOffset, allocator());
 }
 
 bdld::Datum Interpreter::evaluateDefine(const bdld::Datum& tail,

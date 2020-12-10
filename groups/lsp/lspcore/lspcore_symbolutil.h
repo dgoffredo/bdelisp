@@ -13,6 +13,7 @@
 #include <bsls_types.h>
 #include <lspcore_endian.h>
 #include <lspcore_environment.h>
+#include <lspcore_procedure.h>
 #include <lspcore_userdefinedtypes.h>
 
 namespace lspcore {
@@ -35,19 +36,20 @@ struct SymbolUtil {
     // Return a 'Datum' containing or referring to a string that is the name
     // associated with the specified 'symbol'. The behavior is undefined if
     // 'symbol' is encoded as an offset to an environment argument vector. Note
-    // that the overloads of 'name' that take an 'Environment' parameter do not
+    // that the overloads of 'name' that take an 'Procedure' parameter do not
     // have this limitation.
     // TODO: What about lifetime? (referring to a 'bsl::string' in some env)
     static bdld::Datum name(const bdld::Datum& symbol);
     static bdld::Datum name(const bdld::DatumUdt& symbol);
 
     // Return a 'Datum' containing or referring to a string that is the name
-    // associated with the specified 'symbol' in the specified 'environment'.
+    // associated with the specified 'symbol', possibly in the specified
+    // 'Procedure'.
     // TODO: What about lifetime? (referring to a 'bsl::string' in some env)
     static bdld::Datum name(const bdld::Datum& symbol,
-                            const Environment& environment);
+                            const Procedure&   procedure);
     static bdld::Datum name(const bdld::DatumUdt& symbol,
-                            const Environment&    environment);
+                            const Procedure&      procedure);
 
     // Return a pointer to the environment entry to which 'symbol' refers in
     // the specified 'environment'. Return a null pointer if 'symbol' is
@@ -60,6 +62,7 @@ struct SymbolUtil {
         const bdld::DatumUdt& symbol, const Environment& environment);
 
     static bool isSymbol(const bdld::Datum& datum, int typeOffset);
+    static bool isSymbol(const bdld::DatumUdt& datum, int typeOffset);
 
   private:
     enum Encoding { e_DATUM_PTR, e_IN_PLACE, e_ENTRY_PTR, e_ARGUMENTS_OFFSET };
@@ -74,19 +77,23 @@ struct SymbolUtil {
     static bdld::Datum nameInPlace(void* udtData);
     static bdld::Datum nameOutOfPlace(void* udtData);
     static bdld::Datum nameEntry(void* udtData);
-    static bdld::Datum nameOffset(void* udtData, const Environment&);
+    static bdld::Datum nameOffset(void* udtData, const Procedure&);
 
     static const bsl::pair<const bsl::string, bdld::Datum>* entry(
         void* udtData);
     static const bsl::pair<const bsl::string, bdld::Datum>* fromOffset(
         void* udtData, const Environment&);
+    static bsl::string_view fromOffset(void* udtData, const Procedure&);
 
     static bslma::Allocator* const s_neverAllocate;
 };
 
 inline bool SymbolUtil::isSymbol(const bdld::Datum& datum, int typeOffset) {
-    return datum.isUdt() &&
-           datum.theUdt().type() == UserDefinedTypes::e_SYMBOL + typeOffset;
+    return datum.isUdt() && isSymbol(datum.theUdt(), typeOffset);
+}
+
+inline bool SymbolUtil::isSymbol(const bdld::DatumUdt& udt, int typeOffset) {
+    return udt.type() == UserDefinedTypes::e_SYMBOL + typeOffset;
 }
 
 // Symbols have four different representations:
@@ -96,8 +103,10 @@ inline bool SymbolUtil::isSymbol(const bdld::Datum& datum, int typeOffset) {
 // 3. 'bsl::pair<bsl::string, bdld::Datum>*' to a resolved environment entry
 // 4. an offset into the local environment's vector of procedure arguments
 //
-// In all cases, the length of the name of a symbol must not exceed
-// 65,535 bytes.
+// In all cases, the length of the name of a symbol must not exceed 65,535
+// bytes. This allows 'bdld::Datum::createStringRef' to be used on 32-bit
+// systems without allocating memory. It might seem an unnecessary restriction,
+// but do you really need symbol names longer than 64k?
 //
 // For (2), symbols containing very small strings are optimized to reside
 // within the 'bdld::DatumUdt' itself. One byte of the internal 'void*' is
@@ -243,11 +252,11 @@ inline bdld::Datum SymbolUtil::name(const bdld::Datum& symbol) {
 }
 
 inline bdld::Datum SymbolUtil::name(const bdld::Datum& symbol,
-                                    const Environment& environment) {
+                                    const Procedure&   procedure) {
     BSLS_ASSERT(symbol.isUdt());
 
     // udt stands for "user-defined type"
-    return name(symbol.theUdt(), environment);
+    return name(symbol.theUdt(), procedure);
 }
 
 inline bdld::Datum SymbolUtil::name(const bdld::DatumUdt& udt) {
@@ -267,7 +276,7 @@ inline bdld::Datum SymbolUtil::name(const bdld::DatumUdt& udt) {
 }
 
 inline bdld::Datum SymbolUtil::name(const bdld::DatumUdt& udt,
-                                    const Environment&    environment) {
+                                    const Procedure&      procedure) {
     // udt stands for "user-defined type"
     switch (const Encoding format = encoding(udt.data())) {
         case e_DATUM_PTR:
@@ -279,7 +288,7 @@ inline bdld::Datum SymbolUtil::name(const bdld::DatumUdt& udt,
         default:
             (void)format;
             BSLS_ASSERT(format == e_ARGUMENTS_OFFSET);
-            return nameOffset(udt.data(), environment);
+            return nameOffset(udt.data(), procedure);
     }
 }
 
@@ -345,10 +354,27 @@ inline const bsl::pair<const bsl::string, bdld::Datum>* SymbolUtil::fromOffset(
     const bsls::Types::UintPtr offset =
         reinterpret_cast<bsls::Types::UintPtr>(udtData) >> 2;
 
-    BSLS_ASSERT(environment.arguments().size() < offset);
+    BSLS_ASSERT(offset < environment.arguments().size());
     BSLS_ASSERT(environment.arguments()[offset]);
 
     return environment.arguments()[offset];
+}
+
+inline bsl::string_view SymbolUtil::fromOffset(void*            udtData,
+                                               const Procedure& procedure) {
+    BSLS_ASSERT(encoding(udtData) == e_ARGUMENTS_OFFSET);
+
+    const bsls::Types::UintPtr offset =
+        reinterpret_cast<bsls::Types::UintPtr>(udtData) >> 2;
+
+    if (offset < procedure.positionalParameters.size()) {
+        return procedure.positionalParameters[offset];
+    }
+    else {
+        BSLS_ASSERT(!procedure.restParameter.empty());
+        BSLS_ASSERT(offset == procedure.positionalParameters.size());
+        return procedure.restParameter;
+    }
 }
 
 inline bdld::Datum SymbolUtil::nameEntry(void* udtData) {
@@ -359,13 +385,13 @@ inline bdld::Datum SymbolUtil::nameEntry(void* udtData) {
                                         s_neverAllocate);
 }
 
-inline bdld::Datum SymbolUtil::nameOffset(void*              udtData,
-                                          const Environment& environment) {
+inline bdld::Datum SymbolUtil::nameOffset(void*            udtData,
+                                          const Procedure& procedure) {
     // TODO: What about lifetime? (referring to a 'bsl::string' in some env)
     // Right now I'm not copying, because I figure it will be fine; but when
     // you look into garbage collection more closely, look at this again.
-    return bdld::Datum::createStringRef(
-        fromOffset(udtData, environment)->first, s_neverAllocate);
+    return bdld::Datum::createStringRef(fromOffset(udtData, procedure),
+                                        s_neverAllocate);
 }
 
 inline const bsl::pair<const bsl::string, bdld::Datum>* SymbolUtil::resolve(

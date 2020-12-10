@@ -58,6 +58,22 @@ class Interpreter {
                             const Pair&                form,
                             Environment&);
 
+    bdld::Datum partiallyResolve(
+        const bdld::Datum&              form,
+        const bsl::vector<bsl::string>& positionalParameters,
+        const bsl::string&              restParameter,
+        const Environment&);
+    bdld::Datum partiallyResolveSymbol(
+        const bdld::Datum&              symbol,
+        const bsl::vector<bsl::string>& positionalParameters,
+        const bsl::string&              restParameter,
+        const Environment&);
+    bdld::Datum partiallyResolvePair(
+        const bdld::Datum&              pair,
+        const bsl::vector<bsl::string>& positionalParameters,
+        const bsl::string&              restParameter,
+        const Environment&);
+
     bslma::Allocator* allocator() const;
 };
 
