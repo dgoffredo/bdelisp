@@ -1,0 +1,14 @@
+#!/bin/sh
+
+REPO=$(realpath $(dirname $0)/../)
+
+N=${1:-5000}
+
+if [ -z "$INTERPRETER" ]; then
+    INTERPRETER="$REPO/build/applications/repl interpreter"
+fi
+
+$INTERPRETER <<END_COMMANDS
+(define count-down (lambda (n) (if (= n 0.0) #f (count-down (- n 1.0))))) 
+(count-down $N.0)
+END_COMMANDS

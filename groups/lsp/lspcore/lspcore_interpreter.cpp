@@ -542,29 +542,44 @@ bdld::Datum Interpreter::partiallyResolvePair(
     const bsl::vector<bsl::string>& positionalParameters,
     const bsl::string&              restParameter,
     const Environment&              environment) {
-    const Pair&       pair = Pair::access(pairDatum);
+    const Pair& pair = Pair::access(pairDatum);
+
     const bdld::Datum head = partiallyResolve(
         pair.first, positionalParameters, restParameter, environment);
+
+    // If 'head' is a symbol that resolved to a builtin, or if 'head' is itself
+    // a builtin, then we might have special handling for this form. Use
+    // 'e_UNDEFINED' to mean "no special handling" ('e_IF' would work as well).
+    Builtins::Builtin headBuiltin = Builtins::e_UNDEFINED;
+    if (Builtins::isBuiltin(head, d_typeOffset)) {
+        headBuiltin = Builtins::access(head);
+    }
+    else if (SymbolUtil::isSymbol(head, d_typeOffset)) {
+        const bsl::pair<const bsl::string, bdld::Datum>* entry =
+            SymbolUtil::resolve(head, environment);
+        if (entry && Builtins::isBuiltin(entry->second, d_typeOffset)) {
+            headBuiltin = Builtins::access(entry->second);
+        }
+    }
+
     // In the general case, we just "map" 'partiallyResolve' over the
     // (proper/improper) list. If the 'head' is a builtin, though, then there
     // are some special cases.
     bool skipFirstArgument = false;
-    if (Builtins::isBuiltin(head, d_typeOffset)) {
-        switch (Builtins::access(head)) {
-            case Builtins::e_LAMBDA:
-            case Builtins::e_QUOTE:
-                // skip these forms
-                return pairDatum;
-            case Builtins::e_DEFINE:
-            case Builtins::e_SET:
-                // (set/define name value)
-                // resolve only the 'value'
-                skipFirstArgument = true;
-                break;
-            case Builtins::e_IF:
-            case Builtins::e_UNDEFINED:
-                break;
-        }
+    switch (headBuiltin) {
+        case Builtins::e_LAMBDA:
+        case Builtins::e_QUOTE:
+            // skip these forms
+            return pairDatum;
+        case Builtins::e_DEFINE:
+        case Builtins::e_SET:
+            // (set/define name value)
+            // resolve only the 'value'
+            skipFirstArgument = true;
+            break;
+        case Builtins::e_IF:
+        case Builtins::e_UNDEFINED:
+            break;
     }
 
     bsl::vector<bdld::Datum> items;
@@ -931,8 +946,6 @@ bdld::Datum Interpreter::invokeNative(const bdld::DatumUdt& nativeProcedure,
 bdld::Datum Interpreter::invokeArray(const bdld::DatumArrayRef& array,
                                      const Pair&                form,
                                      Environment&               environment) {
-    BSLS_ASSERT(form.first.isArray());
-
     // Arrays are functions of their indices, e.g. '([9 8 7 6] 2)' is '7',
     // because the element at offset '2' in the array is '7'.
     //
