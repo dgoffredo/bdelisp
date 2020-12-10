@@ -54,6 +54,9 @@ class Interpreter {
     bdld::Datum invokeNative(const bdld::DatumUdt& nativeProcedure,
                              const bdld::Datum&    tail,
                              Environment&);
+    bdld::Datum invokeArray(const bdld::DatumArrayRef& array,
+                            const Pair&                form,
+                            Environment&);
 
     bslma::Allocator* allocator() const;
 };

@@ -117,32 +117,34 @@ void Interpreter::collectGarbage() {
 }
 
 bdld::Datum Interpreter::evaluateArray(const bdld::DatumArrayRef& array,
-                                       Environment&) {
+                                       Environment& environment) {
     BSLS_ASSERT(array.length() != 0);
 
     bdld::DatumArrayBuilder builder(allocator());
     for (bsl::size_t i = 0; i < array.length(); ++i) {
-        builder.pushBack(evaluate(array[i]));
+        builder.pushBack(evaluateExpression(array[i], environment));
     }
 
     return builder.commit();
 }
 
 bdld::Datum Interpreter::evaluateStringMap(const bdld::DatumMapRef& map,
-                                           Environment&) {
+                                           Environment& environment) {
     bdld::DatumMapOwningKeysBuilder builder(allocator());
     for (bsl::size_t i = 0; i < map.size(); ++i) {
-        builder.pushBack(map[i].key(), evaluate(map[i].value()));
+        builder.pushBack(map[i].key(),
+                         evaluateExpression(map[i].value(), environment));
     }
 
     return builder.commit();
 }
 
 bdld::Datum Interpreter::evaluateIntMap(const bdld::DatumIntMapRef& map,
-                                        Environment&) {
+                                        Environment& environment) {
     bdld::DatumIntMapBuilder builder(allocator());
     for (bsl::size_t i = 0; i < map.size(); ++i) {
-        builder.pushBack(map[i].key(), evaluate(map[i].value()));
+        builder.pushBack(map[i].key(),
+                         evaluateExpression(map[i].value(), environment));
     }
 
     return builder.commit();
@@ -166,6 +168,7 @@ Classification classify(const bdld::Datum& form,
         return e_OTHER;
     }
 
+    // TODO: This will have to change
     const bdld::Datum name = SymbolUtil::name(pair.first);
     const bsl::pair<const bsl::string, bdld::Datum>* const entry =
         environment.lookup(name.theString());
@@ -195,6 +198,7 @@ bdld::Datum Interpreter::evaluatePair(const Pair&  pair,
 
     switch (head.type()) {
         case bdld::Datum::e_ARRAY:
+            return invokeArray(head.theArray(), pair, environment);
         case bdld::Datum::e_MAP:
         case bdld::Datum::e_INT_MAP:
             // TODO: These are functions of their keys.
@@ -410,7 +414,10 @@ bdld::Datum Interpreter::evaluateLambda(const bdld::Datum& tail,
         throw bdld::Datum::createError(
             -1, "λ expression body must be a proper list", allocator());
     }
-    procedure->body        = &Pair::access(body);
+    // TODO: transform the body into one with symbols resolved as much as
+    // possible.
+    procedure->body = &Pair::access(body);
+
     procedure->environment = &environment;
     environment.markAsReferenced();
 
@@ -617,8 +624,7 @@ tailCall:
     // is to traverse nested 'if' expressions that are in tail position, in
     // order to get to the underlying value or tail call.
     for (bdld::Datum form = rest->first;;) {
-        Classification classification =
-            classify(form, environment, d_typeOffset);
+        Classification classification = classify(form, *env, d_typeOffset);
         switch (classification) {
             case e_OTHER:
                 return evaluateExpression(form, *env);
@@ -745,6 +751,57 @@ bdld::Datum Interpreter::invokeNative(const bdld::DatumUdt& nativeProcedure,
     // resizing the argument vector and assigning to its sole element.
     BSLS_ASSERT_OPT(argumentsAndResult.size() == 1);
     return argumentsAndResult[0];
+}
+
+bdld::Datum Interpreter::invokeArray(const bdld::DatumArrayRef& array,
+                                     const Pair&                form,
+                                     Environment&               environment) {
+    BSLS_ASSERT(form.first.isArray());
+
+    // Arrays are functions of their indices, e.g. '([9 8 7 6] 2)' is '7',
+    // because the element at offset '2' in the array is '7'.
+    //
+    // There must be exactly one argument, and it must be either an integer or
+    // an integer64.
+
+    if (!Pair::isPair(form.second, d_typeOffset)) {
+        bsl::ostringstream error;
+        error << "array invocation form must be a proper list of two "
+                 "elements, not: ";
+        PrintUtil::print(error, form, d_typeOffset);
+        throw bdld::Datum::createError(-1, error.str(), allocator());
+    }
+
+    const Pair& tail = Pair::access(form.second);
+    if (!tail.second.isNull()) {
+        bsl::ostringstream error;
+        error << "array invocation form must be a proper list of two "
+                 "elements, not: ";
+        PrintUtil::print(error, form, d_typeOffset);
+        throw bdld::Datum::createError(-1, error.str(), allocator());
+    }
+
+    const bdld::Datum indexDatum = evaluateExpression(tail.first, environment);
+    if (!indexDatum.isInteger() && !indexDatum.isInteger64()) {
+        bsl::ostringstream error;
+        error << "argument to array invocation must be some kind of integer, "
+                 "not: "
+              << indexDatum << "  Error occurred in form: ";
+        PrintUtil::print(error, form, d_typeOffset);
+        throw bdld::Datum::createError(-1, error.str(), allocator());
+    }
+
+    const bsls::Types::Int64 index = indexDatum.isInteger()
+                                         ? indexDatum.theInteger()
+                                         : indexDatum.theInteger64();
+    if (index < 0 || index >= bsls::Types::Int64(array.length())) {
+        bsl::ostringstream error;
+        error << "array index out of range (" << index << ") in form: ";
+        PrintUtil::print(error, form, d_typeOffset);
+        throw bdld::Datum::createError(-1, error.str(), allocator());
+    }
+
+    return array[index];
 }
 
 bslma::Allocator* Interpreter::allocator() const {
