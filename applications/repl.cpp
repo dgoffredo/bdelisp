@@ -43,8 +43,8 @@ int interpreter() {
     rc = interpreter.defineNativeProcedure("/",
                                            lspcore::ArithmeticUtil::divide);
     BSLS_ASSERT_OPT(rc == 0);
-    rc = interpreter.defineNativeProcedure("=",
-                                           lspcore::ArithmeticUtil::equate);
+    rc =
+        interpreter.defineNativeProcedure("=", lspcore::ArithmeticUtil::equal);
     BSLS_ASSERT_OPT(rc == 0);
 
     bdlb::Variant2<bdld::Datum, lspcore::ParserError> parserResult;

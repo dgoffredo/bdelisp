@@ -6,22 +6,23 @@
 namespace lspcore {
 
 struct ArithmeticUtil {
-    static void add(bsl::vector<bdld::Datum>& argsAndOutput,
-                    Environment&              environment,
-                    bslma::Allocator*         allocator);
-    static void subtract(bsl::vector<bdld::Datum>& argsAndOutput,
-                         Environment&              environment,
-                         bslma::Allocator*         allocator);
-    static void multiply(bsl::vector<bdld::Datum>& argsAndOutput,
-                         Environment&              environment,
-                         bslma::Allocator*         allocator);
-    static void divide(bsl::vector<bdld::Datum>& argsAndOutput,
-                       Environment&              environment,
-                       bslma::Allocator*         allocator);
-    // TODO: "=" should be somewhere else
-    static void equate(bsl::vector<bdld::Datum>& argsAndOutput,
-                       Environment&              environment,
-                       bslma::Allocator*         allocator);
+#define FUNCTION(NAME)                                 \
+    void NAME(bsl::vector<bdld::Datum>& argsAndOutput, \
+              Environment&              environment,   \
+              bslma::Allocator*         allocator)
+
+    static FUNCTION(add);
+    static FUNCTION(subtract);
+    static FUNCTION(multiply);
+    static FUNCTION(divide);
+
+    static FUNCTION(equal);
+    static FUNCTION(less);
+    static FUNCTION(lessOrEqual);
+    static FUNCTION(greater);
+    static FUNCTION(greaterOrEqual);
+
+#undef FUNCTION
 };
 
 }  // namespace lspcore
