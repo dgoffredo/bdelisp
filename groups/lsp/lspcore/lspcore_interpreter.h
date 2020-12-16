@@ -47,6 +47,7 @@ class Interpreter {
     bdld::Datum evaluateSymbol(const bdld::Datum&, Environment&);
     bdld::Datum evaluateLambda(const bdld::Datum&, Environment&);
     bdld::Datum evaluateDefine(const bdld::Datum&, Environment&);
+    bdld::Datum evaluateQuote(const bdld::Datum& tail);
 
     bdld::Datum invokeProcedure(const bdld::DatumUdt& procedure,
                                 const bdld::Datum&    tail,
@@ -73,6 +74,8 @@ class Interpreter {
         const bsl::vector<bsl::string>& positionalParameters,
         const bsl::string&              restParameter,
         const Environment&);
+
+    bdld::Datum partiallyEvaluateIf(const bdld::Datum& tail, Environment&);
 
     bslma::Allocator* allocator() const;
 };

@@ -230,13 +230,11 @@ bdld::Datum Interpreter::evaluatePair(const Pair&  pair,
                         throw bdld::Datum::createError(
                             -1, "\"set!\" not yet implemented", allocator());
                     case Builtins::e_QUOTE:
-                        // TODO
-                        throw bdld::Datum::createError(
-                            -1, "\"quote\" not yet implemented", allocator());
+                        return evaluateQuote(pair.second);
                     case Builtins::e_IF:
-                        // TODO
-                        throw bdld::Datum::createError(
-                            -1, "\"if\" not yet implemented", allocator());
+                        return evaluateExpression(
+                            partiallyEvaluateIf(pair.second, environment),
+                            environment);
                     case Builtins::e_UNDEFINED:
                         break;
                 }
@@ -617,6 +615,57 @@ bdld::Datum Interpreter::partiallyResolvePair(
     return ListUtil::createList(items, d_typeOffset, allocator());
 }
 
+bdld::Datum Interpreter::partiallyEvaluateIf(const bdld::Datum& tail,
+                                             Environment&       environment) {
+    // An 'if' form has three arguments:
+    //
+    //     (if <predicate> <then> <else>)
+    //
+    // Evaluate the <predicate>. If it's '#f', then return <else>
+    // unevaluated. Otherwise, return <then> unevaluated.
+    if (!Pair::isPair(tail, d_typeOffset)) {
+        throw bdld::Datum::createError(
+            -1,
+            "\"if\" form must have three arguments: <predicate> "
+            "<then> <else>",
+            allocator());
+    }
+    const Pair*        ifTail    = &Pair::access(tail);
+    const bdld::Datum& predicate = ifTail->first;
+
+    if (!Pair::isPair(ifTail->second, d_typeOffset)) {
+        throw bdld::Datum::createError(
+            -1,
+            "\"if\" form must have three arguments: <predicate> "
+            "<then> <else>",
+            allocator());
+    }
+    ifTail                      = &Pair::access(ifTail->second);
+    const bdld::Datum& thenForm = ifTail->first;
+
+    if (!Pair::isPair(ifTail->second, d_typeOffset)) {
+        throw bdld::Datum::createError(
+            -1,
+            "\"if\" form must have three arguments: <predicate> "
+            "<then> <else>",
+            allocator());
+    }
+    ifTail                      = &Pair::access(ifTail->second);
+    const bdld::Datum& elseForm = ifTail->first;
+    if (!ifTail->second.isNull()) {
+        throw bdld::Datum::createError(
+            -1, "\"if\" form must be a proper list", allocator());
+    }
+
+    const bdld::Datum predicateResult =
+        evaluateExpression(predicate, environment);
+    if (predicateResult == bdld::Datum::createBoolean(false)) {
+        return elseForm;
+    }
+
+    return thenForm;
+}
+
 bdld::Datum Interpreter::evaluateDefine(const bdld::Datum& tail,
                                         Environment&       environment) {
     // Other lisps disallow 'define' in "expression context." When I start
@@ -678,6 +727,21 @@ bdld::Datum Interpreter::evaluateDefine(const bdld::Datum& tail,
     const bdld::Datum value = evaluateExpression(rest.first, environment);
     entry.first->second     = value;
     return value;
+}
+
+bdld::Datum Interpreter::evaluateQuote(const bdld::Datum& tail) {
+    if (Pair::isPair(tail, d_typeOffset)) {
+        const Pair& pair = Pair::access(tail);
+        if (pair.second.isNull()) {
+            return pair.first;
+        }
+    }
+
+    throw bdld::Datum::createError(
+        -1,
+        "\"quote\" form must be a proper list having two elements: \"quote\" "
+        "and one argument",
+        allocator());
 }
 
 bdld::Datum Interpreter::invokeProcedure(const bdld::DatumUdt& procedure,
@@ -827,52 +891,7 @@ tailCall:
                 // Evaluate the <predicate>. If it's '#f', then loop around
                 // using <else> as the 'form'. Otherwise, loop around using
                 // <then> as the form.
-                const Pair* ifTail = &Pair::access(form);
-                // TODO: refactor all of this 'if' form unpacking into a
-                // function that this can share with the non-tail-position 'if'
-                // handler.
-                if (!Pair::isPair(ifTail->second, d_typeOffset)) {
-                    throw bdld::Datum::createError(
-                        -1,
-                        "\"if\" form must have three arguments: <predicate> "
-                        "<then> <else>",
-                        allocator());
-                }
-                ifTail                       = &Pair::access(ifTail->second);
-                const bdld::Datum& predicate = ifTail->first;
-
-                if (!Pair::isPair(ifTail->second, d_typeOffset)) {
-                    throw bdld::Datum::createError(
-                        -1,
-                        "\"if\" form must have three arguments: <predicate> "
-                        "<then> <else>",
-                        allocator());
-                }
-                ifTail                      = &Pair::access(ifTail->second);
-                const bdld::Datum& thenForm = ifTail->first;
-
-                if (!Pair::isPair(ifTail->second, d_typeOffset)) {
-                    throw bdld::Datum::createError(
-                        -1,
-                        "\"if\" form must have three arguments: <predicate> "
-                        "<then> <else>",
-                        allocator());
-                }
-                ifTail                      = &Pair::access(ifTail->second);
-                const bdld::Datum& elseForm = ifTail->first;
-                if (!ifTail->second.isNull()) {
-                    throw bdld::Datum::createError(
-                        -1, "\"if\" form must be a proper list", allocator());
-                }
-
-                const bdld::Datum predicateResult =
-                    evaluateExpression(predicate, *env);
-                if (predicateResult == bdld::Datum::createBoolean(false)) {
-                    form = elseForm;
-                }
-                else {
-                    form = thenForm;
-                }
+                form = partiallyEvaluateIf(Pair::access(form).second, *env);
                 break;  // or, equivalently, 'continue'
             }
             default: {

@@ -398,8 +398,8 @@ class NotEqual {
     }
 
     bool operator()(const bdld::Datum& left, const bdld::Datum& right) const {
-        if (left == right) {
-            return false;
+        if (left.type() == right.type()) {
+            return left != right;
         }
 
 #define TYPE_PAIR(LEFT, RIGHT) \
