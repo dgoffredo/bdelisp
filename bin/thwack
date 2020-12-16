@@ -9,6 +9,6 @@ if [ -z "$INTERPRETER" ]; then
 fi
 
 $INTERPRETER <<END_COMMANDS
-(define count-down (lambda (n) (if (= n 0.0) #f (count-down (- n 1.0))))) 
-(count-down $N.0)
+(define count-down (lambda (n) (if (= n 0) #f (count-down (- n 1))))) 
+(count-down $N)
 END_COMMANDS

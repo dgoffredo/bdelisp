@@ -1,7 +1,10 @@
 #include <bdlb_arrayutil.h>
+#include <bdlb_bitutil.h>
 #include <bdld_datummaker.h>
 #include <bdldfp_decimal.h>
+#include <bdldfp_decimalutil.h>
 #include <bsl_algorithm.h>
+#include <bsl_cmath.h>
 #include <bsl_functional.h>
 #include <bsl_limits.h>
 #include <bsl_numeric.h>
@@ -10,6 +13,7 @@
 #include <bsls_assert.h>
 #include <bsls_types.h>
 #include <lspcore_arithmeticutil.h>
+#include <math.h>  // isnan
 
 using namespace BloombergLP;
 
@@ -277,6 +281,161 @@ bdld::Datum::DataType normalizeTypes(bsl::vector<bdld::Datum>& data,
     }
 }
 
+int divideFives(bsl::uint64_t* ptr) {
+    BSLS_ASSERT(ptr);
+    bsl::uint64_t& value = *ptr;
+    BSLS_ASSERT(value != 0);
+
+    int count;
+    for (count = 0; value % 5 == 0; ++count) {
+        value /= 5;
+    }
+
+    return count;
+}
+
+bool notEqual(double binary, bdldfp::Decimal64 decimal) {
+    // Ladies and gentlemen, I present to you the least efficient equality
+    // predicate ever devised.
+    //
+    // The plan is to divide out the factors of 2 and 5 from the significands
+    // of 'binary' and 'decimal'. Since the radix of 'binary' is 2 and the
+    // radix of 'decimal' is 10 (which is 2*5), we can then compare the reduced
+    // significands and the exponents.
+    //
+    // One optimization is possible for "find the factors of two in the
+    // significand." For nonzero values, we can count the number of trailing
+    // zero bits (that's the number of factors of two) and then shift right
+    // that many bits.
+    //
+    // Factors of five we'll have to do the hard way, but we need check the
+    // powers of five only if the powers of two happen to be equal.
+
+    // 'bsl::uint64_t' and 'bsls::Types::Uint64' can be different types, and
+    // the compiler will complain about aliasing. Here I just pick one and
+    // copy to the other where necessary.
+    typedef bsl::uint64_t Uint64;
+
+    bsls::Types::Uint64 decimalMantissaArg;  // long vs. long long ugh...
+    int                 decimalSign;         // -1 or +1
+    int                 decimalExponent;
+    switch (
+        const int kind = bdldfp::DecimalUtil::decompose(
+            &decimalSign, &decimalMantissaArg, &decimalExponent, decimal)) {
+        case FP_NAN:
+            return true;
+        case FP_INFINITE:
+            return binary !=
+                   bsl::numeric_limits<double>::infinity() * decimalSign;
+        case FP_SUBNORMAL:
+            // same handling as in the 'FP_NORMAL' case ('default', below)
+            break;
+        case FP_ZERO:
+            return binary != 0;
+        default:
+            (void)kind;
+            BSLS_ASSERT(kind == FP_NORMAL);
+    }
+
+    Uint64 decimalMantissa = decimalMantissaArg;  // long vs. long long ugh...
+
+    // Skip the calculations below if the values have different signs.
+    const int binarySign = binary < 0 ? -1 : 1;
+    if (decimalSign != binarySign) {
+        return true;
+    }
+
+    // To decompose the binary floating point value, we use the standard
+    // library function 'frexp' followed by a multiplication to guarantee an
+    // integer-valued significand. This multiplication will not lose precision.
+    int          binaryExponent;
+    const double binaryNormalizedSignificand =
+        std::frexp(binary, &binaryExponent);
+    if (binaryNormalizedSignificand == 0 ||
+        isnan(binaryNormalizedSignificand) ||
+        binaryNormalizedSignificand ==
+            std::numeric_limits<double>::infinity() ||
+        binaryNormalizedSignificand ==
+            -std::numeric_limits<double>::infinity()) {
+        return true;
+    }
+
+    const int precision = 53;
+    Uint64    binaryMantissa =
+        binaryNormalizedSignificand * (Uint64(1) << (precision - 1));
+    binaryExponent -= precision - 1;
+
+    BSLS_ASSERT(binaryMantissa != 0);
+    BSLS_ASSERT(decimalMantissa != 0);
+
+    const int binaryUnset =
+        bdlb::BitUtil::numTrailingUnsetBits(binaryMantissa);
+    const int binaryTwos = binaryExponent + binaryUnset;
+
+    const int decimalUnset =
+        bdlb::BitUtil::numTrailingUnsetBits(decimalMantissa);
+    const int decimalTwos = decimalExponent + decimalUnset;
+
+    if (binaryTwos != decimalTwos) {
+        return true;
+    }
+
+    binaryMantissa >>= binaryUnset;
+    decimalMantissa >>= decimalUnset;
+
+    const int binaryFives  = divideFives(&binaryMantissa);
+    const int decimalFives = decimalExponent + divideFives(&decimalMantissa);
+
+    return binaryFives != decimalFives || binaryMantissa != decimalMantissa;
+}
+
+class NotEqual {
+    bslma::Allocator* d_allocator_p;
+
+  public:
+    explicit NotEqual(bslma::Allocator* allocator)
+    : d_allocator_p(allocator) {
+    }
+
+    bool operator()(const bdld::Datum& left, const bdld::Datum& right) const {
+        if (left == right) {
+            return false;
+        }
+
+#define TYPE_PAIR(LEFT, RIGHT) \
+    ((bsl::uint64_t(LEFT) << 32) | bsl::uint64_t(RIGHT))
+
+        switch (TYPE_PAIR(left.type(), right.type())) {
+            case TYPE_PAIR(bdld::Datum::e_INTEGER, bdld::Datum::e_INTEGER64):
+                return left.theInteger() != right.theInteger64();
+            case TYPE_PAIR(bdld::Datum::e_INTEGER64, bdld::Datum::e_INTEGER):
+                return right.theInteger() != left.theInteger64();
+            case TYPE_PAIR(bdld::Datum::e_INTEGER, bdld::Datum::e_DOUBLE):
+                return left.theInteger() != right.theDouble();
+            case TYPE_PAIR(bdld::Datum::e_DOUBLE, bdld::Datum::e_INTEGER):
+                return right.theInteger() != left.theDouble();
+            case TYPE_PAIR(bdld::Datum::e_INTEGER, bdld::Datum::e_DECIMAL64):
+                return bdldfp::Decimal64(left.theInteger()) !=
+                       right.theDecimal64();
+            case TYPE_PAIR(bdld::Datum::e_DECIMAL64, bdld::Datum::e_INTEGER):
+                return bdldfp::Decimal64(right.theInteger()) !=
+                       left.theDecimal64();
+            case TYPE_PAIR(bdld::Datum::e_DOUBLE, bdld::Datum::e_DECIMAL64):
+                return notEqual(left.theDouble(), right.theDecimal64());
+            case TYPE_PAIR(bdld::Datum::e_DECIMAL64, bdld::Datum::e_DOUBLE):
+                return notEqual(right.theDouble(), left.theDecimal64());
+            default: {
+                bsl::ostringstream error;
+                error << "Numbers have incompatible types: " << left << " and "
+                      << right;
+                throw bdld::Datum::createError(-1, error.str(), d_allocator_p);
+            }
+        }
+
+#undef TYPE_PAIR
+    }
+};
+
 }  // namespace
 
 #define DISPATCH(FUNCTION)                                                 \
@@ -335,12 +494,16 @@ void ArithmeticUtil::equal(bsl::vector<bdld::Datum>& argsAndOutput,
                            bslma::Allocator* allocator) {
     if (argsAndOutput.empty()) {
         throw bdld::Datum::createError(
-            -1, "equlity comparison requires at least one operand", allocator);
+            -1,
+            "equality comparison requires at least one operand",
+            allocator);
     }
     if (classify(argsAndOutput).kind ==
         Classification::e_ERROR_NON_NUMERIC_TYPE) {
         throw bdld::Datum::createError(
-            -1, "equlity comparison requires all numeric operands", allocator);
+            -1,
+            "equality comparison requires all numeric operands",
+            allocator);
     }
 
     bool result;
@@ -348,10 +511,10 @@ void ArithmeticUtil::equal(bsl::vector<bdld::Datum>& argsAndOutput,
         result = true;
     }
     else {
-        result = std::adjacent_find(argsAndOutput.begin(),
-                                    argsAndOutput.end(),
-                                    bsl::not_equal_to<bdld::Datum>()) ==
-                 argsAndOutput.end();
+        result =
+            std::adjacent_find(argsAndOutput.begin(),
+                               argsAndOutput.end(),
+                               NotEqual(allocator)) == argsAndOutput.end();
     }
 
     argsAndOutput.resize(1);
