@@ -1,8 +1,12 @@
 #include <bsl_cstddef.h>
 #include <bsl_sstream.h>
 #include <lspcore_builtinprocedures.h>
+#include <lspcore_interpreter.h>
+#include <lspcore_listutil.h>
+#include <lspcore_nativeprocedureutil.h>
 #include <lspcore_pair.h>
 #include <lspcore_printutil.h>
+#include <lspcore_procedure.h>
 
 namespace lspcore {
 namespace {
@@ -82,6 +86,52 @@ void BuiltinProcedures::equal(const NativeProcedureUtil::Arguments& args) {
     // TODO
     throw bdld::Datum::createError(
         -1, "\"equal?\" is not yet implemented", args.allocator);
+}
+
+void BuiltinProcedures::list(const NativeProcedureUtil::Arguments& args) {
+    const bdld::Datum result = ListUtil::createList(
+        *args.argsAndOutput, args.typeOffset, args.allocator);
+    args.argsAndOutput->resize(1);
+    args.argsAndOutput->front() = result;
+}
+
+void BuiltinProcedures::apply(const NativeProcedureUtil::Arguments& args) {
+    // 'apply' takes two arguments:
+    // 1. a procedure or native procedure to invoke
+    // 2. a list of data to use as the arguments to the procedure
+    enforceArity("apply", 2, args);
+
+    const bdld::Datum& procedure = (*args.argsAndOutput)[0];
+    if (!(Procedure::isProcedure(procedure, args.typeOffset) ||
+          NativeProcedureUtil::isNativeProcedure(procedure,
+                                                 args.typeOffset))) {
+        throw bdld::Datum::createError(
+            -1,
+            "first argument to \"apply\" must be a procedure",
+            args.allocator);
+    }
+
+    const bdld::Datum& argList = (*args.argsAndOutput)[1];
+    if (!ListUtil::isProperList(argList, args.typeOffset)) {
+        throw bdld::Datum::createError(
+            -1,
+            "second argument to \"apply\" must be a proper list",
+            args.allocator);
+    }
+
+    const bdld::Datum invocation =
+        Pair::create(procedure, argList, args.typeOffset, args.allocator);
+    const bdld::Datum result =
+        args.interpreter->evaluateExpression(invocation, *args.environment);
+
+    args.argsAndOutput->resize(1);
+    args.argsAndOutput->front() = result;
+}
+
+void BuiltinProcedures::raise(const NativeProcedureUtil::Arguments& args) {
+    enforceArity("raise", 1, args);
+
+    throw args.argsAndOutput->front();
 }
 
 }  // namespace lspcore

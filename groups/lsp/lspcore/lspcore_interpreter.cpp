@@ -956,7 +956,7 @@ bdld::Datum Interpreter::invokeNative(const bdld::DatumUdt& nativeProcedure,
     }
 
     const NativeProcedureUtil::Arguments args = {
-        &argumentsAndResult, &environment, d_typeOffset, allocator()
+        &argumentsAndResult, &environment, d_typeOffset, this, allocator()
     };
     NativeProcedureUtil::invoke(nativeProcedure, args);
     // The contract with native procedures states that they deliver a result by

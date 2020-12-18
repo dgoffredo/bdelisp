@@ -49,6 +49,9 @@ int interpreter() {
         { "pair-second", &lspcore::BuiltinProcedures::pairSecond },
         { "null?", &lspcore::BuiltinProcedures::isNull },
         { "equal?", &lspcore::BuiltinProcedures::equal },
+        { "list", &lspcore::BuiltinProcedures::list },
+        { "apply", &lspcore::BuiltinProcedures::apply },
+        { "raise", &lspcore::BuiltinProcedures::raise }
     };
 
     for (const Entry* entry = procedures;
@@ -60,7 +63,8 @@ int interpreter() {
     }
 
     bdlb::Variant2<bdld::Datum, lspcore::ParserError> parserResult;
-    while (bsl::cout << "\nbdelisp> ", bsl::getline(bsl::cin, subject)) {
+    // while (bsl::cout << "\nbdelisp> ", bsl::getline(bsl::cin, subject)) {
+    while (bsl::cout << "\nbdelisp> ", bsl::getline(bsl::cin, subject, '$')) {
         int rc = lexer.reset(subject);
         BSLS_ASSERT_OPT(rc == 0);
 

@@ -14,6 +14,9 @@ struct BuiltinProcedures {
     static FUNCTION(pairSecond);
     static FUNCTION(isNull);
     static FUNCTION(equal);
+    static FUNCTION(list);
+    static FUNCTION(apply);
+    static FUNCTION(raise);
 
 #undef FUNCTION
 };

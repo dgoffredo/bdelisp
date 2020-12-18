@@ -25,7 +25,15 @@ class Interpreter {
   public:
     explicit Interpreter(int typeOffset, bslma::Allocator*);
 
+    // Return the result of evaluating the specified 'expression' in the global
+    // environment. If an error occurs, return the error.
     bdld::Datum evaluate(const bdld::Datum& expression);
+
+    // Return the result of evaluating the specified 'expression' in the
+    // specified 'environment'. Throw an exception of 'bdld::Datum' error type
+    // if an error occurs.
+    bdld::Datum evaluateExpression(const bdld::Datum& expression,
+                                   Environment&       environment);
 
     typedef NativeProcedureUtil::Signature NativeFunc;
 
@@ -39,7 +47,6 @@ class Interpreter {
     void collectGarbage();
 
   private:
-    bdld::Datum evaluateExpression(const bdld::Datum&, Environment&);
     bdld::Datum evaluateArray(const bdld::DatumArrayRef&, Environment&);
     bdld::Datum evaluateStringMap(const bdld::DatumMapRef&, Environment&);
     bdld::Datum evaluateIntMap(const bdld::DatumIntMapRef&, Environment&);

@@ -21,6 +21,7 @@ namespace bdld  = BloombergLP::bdld;
 namespace bslma = BloombergLP::bslma;
 
 class Environment;
+class Interpreter;
 
 // A native procedure is a C++ function that we can call from within the
 // interpreter. It's either a plain old function pointer, or a pointer to a
@@ -62,8 +63,14 @@ class NativeProcedureUtil {
         // defined elsewhere.
         int typeOffset;
 
+        // 'interpreter' is the 'Interpreter' instance within which the current
+        // procedure is executing. Its 'evaluateExpression' member function
+        // gives native procedures effective non-hygienic macro capabilities.
+        // 'interpreter' is never null.
+        Interpreter* interpreter;
+
         // All parts of the returned or thrown 'bdld::Datum' must be allocated
-        // using 'allocator'.
+        // using 'allocator'. 'allocator' is never null.
         bslma::Allocator* allocator;
     };
 
