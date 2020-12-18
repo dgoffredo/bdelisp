@@ -955,8 +955,10 @@ bdld::Datum Interpreter::invokeNative(const bdld::DatumUdt& nativeProcedure,
         throw bdld::Datum::createError(-1, error.str(), allocator());
     }
 
-    NativeProcedureUtil::invoke(
-        nativeProcedure, argumentsAndResult, environment, allocator());
+    const NativeProcedureUtil::Arguments args = {
+        &argumentsAndResult, &environment, d_typeOffset, allocator()
+    };
+    NativeProcedureUtil::invoke(nativeProcedure, args);
     // The contract with native procedures states that they deliver a result by
     // resizing the argument vector and assigning to its sole element.
     BSLS_ASSERT_OPT(argumentsAndResult.size() == 1);

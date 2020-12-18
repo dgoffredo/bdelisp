@@ -6,10 +6,7 @@
 namespace lspcore {
 
 struct ArithmeticUtil {
-#define FUNCTION(NAME)                                 \
-    void NAME(bsl::vector<bdld::Datum>& argsAndOutput, \
-              Environment&              environment,   \
-              bslma::Allocator*         allocator)
+#define FUNCTION(NAME) void NAME(const NativeProcedureUtil::Arguments&)
 
     static FUNCTION(add);
     static FUNCTION(subtract);

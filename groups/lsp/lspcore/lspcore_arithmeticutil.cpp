@@ -438,50 +438,44 @@ class NotEqual {
 
 }  // namespace
 
-#define DISPATCH(FUNCTION)                                                 \
-    switch (bdld::Datum::DataType type =                                   \
-                normalizeTypes(argsAndOutput, allocator)) {                \
-        case bdld::Datum::e_INTEGER:                                       \
-            return FUNCTION<int>(argsAndOutput, allocator);                \
-        case bdld::Datum::e_INTEGER64:                                     \
-            return FUNCTION<bsls::Types::Int64>(argsAndOutput, allocator); \
-        case bdld::Datum::e_DOUBLE:                                        \
-            return FUNCTION<double>(argsAndOutput, allocator);             \
-        default:                                                           \
-            (void)type;                                                    \
-            BSLS_ASSERT(type == bdld::Datum::e_DECIMAL64);                 \
-            return FUNCTION<bdldfp::Decimal64>(argsAndOutput, allocator);  \
+#define DISPATCH(FUNCTION)                                                \
+    switch (bdld::Datum::DataType type =                                  \
+                normalizeTypes(*args.argsAndOutput, args.allocator)) {    \
+        case bdld::Datum::e_INTEGER:                                      \
+            return FUNCTION<int>(*args.argsAndOutput, args.allocator);    \
+        case bdld::Datum::e_INTEGER64:                                    \
+            return FUNCTION<bsls::Types::Int64>(*args.argsAndOutput,      \
+                                                args.allocator);          \
+        case bdld::Datum::e_DOUBLE:                                       \
+            return FUNCTION<double>(*args.argsAndOutput, args.allocator); \
+        default:                                                          \
+            (void)type;                                                   \
+            BSLS_ASSERT(type == bdld::Datum::e_DECIMAL64);                \
+            return FUNCTION<bdldfp::Decimal64>(*args.argsAndOutput,       \
+                                               args.allocator);           \
     }
 
-void ArithmeticUtil::add(bsl::vector<bdld::Datum>& argsAndOutput,
-                         Environment&,
-                         bslma::Allocator* allocator) {
+void ArithmeticUtil::add(const NativeProcedureUtil::Arguments& args) {
     DISPATCH(homogeneousAdd)
 }
 
-void ArithmeticUtil::subtract(bsl::vector<bdld::Datum>& argsAndOutput,
-                              Environment&,
-                              bslma::Allocator* allocator) {
-    if (argsAndOutput.empty()) {
+void ArithmeticUtil::subtract(const NativeProcedureUtil::Arguments& args) {
+    if (args.argsAndOutput->empty()) {
         throw bdld::Datum::createError(
-            -1, "substraction requires at least one operand", allocator);
+            -1, "substraction requires at least one operand", args.allocator);
     }
 
     DISPATCH(homogeneousSubtract)
 }
 
-void ArithmeticUtil::multiply(bsl::vector<bdld::Datum>& argsAndOutput,
-                              Environment&,
-                              bslma::Allocator* allocator) {
+void ArithmeticUtil::multiply(const NativeProcedureUtil::Arguments& args) {
     DISPATCH(homogeneousMultiply)
 }
 
-void ArithmeticUtil::divide(bsl::vector<bdld::Datum>& argsAndOutput,
-                            Environment&,
-                            bslma::Allocator* allocator) {
-    if (argsAndOutput.empty()) {
+void ArithmeticUtil::divide(const NativeProcedureUtil::Arguments& args) {
+    if (args.argsAndOutput->empty()) {
         throw bdld::Datum::createError(
-            -1, "division requires at least one operand", allocator);
+            -1, "division requires at least one operand", args.allocator);
     }
 
     DISPATCH(homogeneousDivide)
@@ -489,36 +483,34 @@ void ArithmeticUtil::divide(bsl::vector<bdld::Datum>& argsAndOutput,
 
 #undef DISPATCH
 
-void ArithmeticUtil::equal(bsl::vector<bdld::Datum>& argsAndOutput,
-                           Environment&,
-                           bslma::Allocator* allocator) {
-    if (argsAndOutput.empty()) {
+void ArithmeticUtil::equal(const NativeProcedureUtil::Arguments& args) {
+    if (args.argsAndOutput->empty()) {
         throw bdld::Datum::createError(
             -1,
             "equality comparison requires at least one operand",
-            allocator);
+            args.allocator);
     }
-    if (classify(argsAndOutput).kind ==
+    if (classify(*args.argsAndOutput).kind ==
         Classification::e_ERROR_NON_NUMERIC_TYPE) {
         throw bdld::Datum::createError(
             -1,
             "equality comparison requires all numeric operands",
-            allocator);
+            args.allocator);
     }
 
     bool result;
-    if (argsAndOutput.size() == 1) {
+    if (args.argsAndOutput->size() == 1) {
         result = true;
     }
     else {
-        result =
-            std::adjacent_find(argsAndOutput.begin(),
-                               argsAndOutput.end(),
-                               NotEqual(allocator)) == argsAndOutput.end();
+        result = std::adjacent_find(args.argsAndOutput->begin(),
+                                    args.argsAndOutput->end(),
+                                    NotEqual(args.allocator)) ==
+                 args.argsAndOutput->end();
     }
 
-    argsAndOutput.resize(1);
-    argsAndOutput[0] = bdld::Datum::createBoolean(result);
+    args.argsAndOutput->resize(1);
+    args.argsAndOutput->front() = bdld::Datum::createBoolean(result);
 }
 
 }  // namespace lspcore

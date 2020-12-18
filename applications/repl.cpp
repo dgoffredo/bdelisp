@@ -1,3 +1,4 @@
+#include <bdlb_arrayutil.h>
 #include <bdlb_variant.h>
 #include <bdld_datum.h>
 #include <bsl_cstddef.h>
@@ -9,6 +10,7 @@
 #include <bslma_default.h>
 #include <bsls_assert.h>
 #include <lspcore_arithmeticutil.h>
+#include <lspcore_builtinprocedures.h>
 #include <lspcore_interpreter.h>
 #include <lspcore_lexer.h>
 #include <lspcore_linecounter.h>
@@ -32,20 +34,30 @@ int interpreter() {
     lspcore::Interpreter interpreter(typeOffset, allocator);
 
     int rc;
-    rc = interpreter.defineNativeProcedure("+", lspcore::ArithmeticUtil::add);
-    BSLS_ASSERT_OPT(rc == 0);
-    rc = interpreter.defineNativeProcedure("-",
-                                           lspcore::ArithmeticUtil::subtract);
-    BSLS_ASSERT_OPT(rc == 0);
-    rc = interpreter.defineNativeProcedure("*",
-                                           lspcore::ArithmeticUtil::multiply);
-    BSLS_ASSERT_OPT(rc == 0);
-    rc = interpreter.defineNativeProcedure("/",
-                                           lspcore::ArithmeticUtil::divide);
-    BSLS_ASSERT_OPT(rc == 0);
-    rc =
-        interpreter.defineNativeProcedure("=", lspcore::ArithmeticUtil::equal);
-    BSLS_ASSERT_OPT(rc == 0);
+    struct Entry {
+        const char*                              name;
+        lspcore::NativeProcedureUtil::Signature* function;
+    } const procedures[] = {
+        { "+", &lspcore::ArithmeticUtil::add },
+        { "-", &lspcore::ArithmeticUtil::subtract },
+        { "*", &lspcore::ArithmeticUtil::multiply },
+        { "/", &lspcore::ArithmeticUtil::divide },
+        { "=", &lspcore::ArithmeticUtil::equal },
+        { "pair?", &lspcore::BuiltinProcedures::isPair },
+        { "pair", &lspcore::BuiltinProcedures::pair },
+        { "pair-first", &lspcore::BuiltinProcedures::pairFirst },
+        { "pair-second", &lspcore::BuiltinProcedures::pairSecond },
+        { "null?", &lspcore::BuiltinProcedures::isNull },
+        { "equal?", &lspcore::BuiltinProcedures::equal },
+    };
+
+    for (const Entry* entry = procedures;
+         entry != bdlb::ArrayUtil::end(procedures);
+         ++entry) {
+        const int rc =
+            interpreter.defineNativeProcedure(entry->name, entry->function);
+        BSLS_ASSERT_OPT(rc == 0);
+    }
 
     bdlb::Variant2<bdld::Datum, lspcore::ParserError> parserResult;
     while (bsl::cout << "\nbdelisp> ", bsl::getline(bsl::cin, subject)) {
