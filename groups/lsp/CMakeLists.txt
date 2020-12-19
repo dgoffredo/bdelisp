@@ -19,6 +19,7 @@ add_library(lsp
     lspcore/lspcore_parser.cpp
     lspcore/lspcore_printutil.cpp
     lspcore/lspcore_procedure.cpp
+    lspcore/lspcore_set.cpp
     lspcore/lspcore_symbolutil.cpp
     lspcore/lspcore_userdefinedtypes.cpp
     )

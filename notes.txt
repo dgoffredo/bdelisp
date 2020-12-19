@@ -1,0 +1,119 @@
+
+
+VectorUtil
+
+vector?
+vector-length
+; vector-ref
+(vector-ref v i)
+(v i)
+(vector ...)
+vector-map
+vector->list
+
+string?
+string-length
+string-append
+string-split
+string-join
+
+list-map
+list-length
+list-reverse
+
+dict?
+dict
+int-dict
+string-dict
+dict-length
+dict-keys (?)
+dict-keys-list
+dict-keys-vector
+
+// TODO
+
+
+
+; generic functions?
+
+(type ...) -> string
+
+(define-generic (length (v <vector>))
+  (vector-length v))
+  
+(define-generic (length (l <list>))
+  (list-length l))
+
+
+(define range
+  (λ args
+    (match args
+      [(list end) ...]
+      [(list begin end) ...]
+      [(list begin end step) ...])))
+     
+(generator 'done?)
+(generator 'next)
+     
+(define range*
+  (λ (begin end step)
+    (define value begin)
+    (λ (operation)
+      (if (equal? operation 'done?)
+        (< value end)
+        (if (not (equal? operation 'next))
+          (raise (error -1 "blah!"))
+          (TODO))))))
+          
+          
+(define-syntax-rule (begin form forms ...)
+  ((lambda ()
+    form forms ...)))
+    
+inserting into a binary set
+
+insert(set, value, before) -> set
+    if set is null:
+        set(value, null, null)
+
+    if before(value, set.value):
+        balance(set(set.value, insert(set.left, value, before), set.right))
+
+    if before(set.value, value):
+        balance(set(set.value, set.left, insert(set.right, value, before)))
+
+    set
+
+(define (insert tree value before?)
+  (let insert ([tree tree] [value value])
+    (match tree
+      ['() (set value '() '())]
+      [(set tree-value left right _)
+       (cond
+         [(before? value tree-value)
+          (balance (set tree-value (insert left value) right))]
+         [(before? tree-value value)
+          (balance (set tree-value left (insert right value)))]
+         [else tree])])))
+        
+(define (balance tree)
+  (match tree
+    ['() tree]
+    [(set _ left right _)
+     (let ([diff (- (set-height right) (set-height left))])
+       (cond
+         [(< diff -1)
+          ; left side is too deep; need to rotate right
+          (rotate-right tree)]
+         [(> diff 1)
+          ; right side is too deep; need to rotate left
+          (rotate-left tree)]
+         [else tree]))]))
+
+ ; Tree as a pair
+ ;
+ (define (to-list set)
+   (match set
+     ['() '()]
+     [(set value left right) (list value (to-list left) (to-list right))]))
+     

@@ -2,6 +2,7 @@
 #include <bdlb_variant.h>
 #include <bdld_datum.h>
 #include <bsl_cstddef.h>
+#include <bsl_iomanip.h>
 #include <bsl_iostream.h>
 #include <bsl_sstream.h>
 #include <bsl_string.h>
@@ -17,6 +18,7 @@
 #include <lspcore_listutil.h>
 #include <lspcore_parser.h>
 #include <lspcore_printutil.h>
+#include <lspcore_set.h>
 #include <lspcore_symbolutil.h>
 
 namespace {
@@ -24,6 +26,48 @@ namespace {
 namespace bdlb  = BloombergLP::bdlb;
 namespace bdld  = BloombergLP::bdld;
 namespace bslma = BloombergLP::bslma;
+
+bool lessThan(const bdld::Datum& left, const bdld::Datum& right) {
+    BSLS_ASSERT_OPT(left.isInteger());
+    BSLS_ASSERT_OPT(right.isInteger());
+
+    return left.theInteger() < right.theInteger();
+}
+
+int sets() {
+    const int           typeOffset = 0;
+    bslma::Allocator*   allocator  = bslma::Default::allocator();
+    const lspcore::Set* set        = 0;
+
+    lspcore::PrintUtil::print(bsl::cout,
+                              lspcore::Set::toList(set, typeOffset, allocator),
+                              typeOffset);
+    bsl::cout << "\n";
+
+    const int values[] = { 10, 43, 134, -8, 0 };
+    for (const int* iter = values; iter != bdlb::ArrayUtil::end(values);
+         ++iter) {
+        set = lspcore::Set::insert(
+            set, bdld::Datum::createInteger(*iter), &lessThan, allocator);
+        bsl::cout << "after adding " << *iter << ":    ";
+        lspcore::PrintUtil::print(
+            bsl::cout,
+            lspcore::Set::toList(set, typeOffset, allocator),
+            typeOffset);
+        bsl::cout << "\n";
+    }
+
+    const int checks[] = { 10, -1, -8, 43, 44 };
+    for (const int* iter = checks; iter != bdlb::ArrayUtil::end(checks);
+         ++iter) {
+        bsl::cout << "Is " << *iter << " in the set?    " << bsl::boolalpha
+                  << lspcore::Set::contains(
+                         set, bdld::Datum::createInteger(*iter), &lessThan)
+                  << "\n";
+    }
+
+    return 0;
+}
 
 int interpreter() {
     lspcore::Lexer       lexer;
@@ -264,6 +308,9 @@ int main(int argc, char* argv[]) {
     }
     else if (which == "interpreter") {
         return interpreter();
+    }
+    else if (which == "sets") {
+        return sets();
     }
 
     BSLS_ASSERT_OPT(which == "counter");
