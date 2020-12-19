@@ -1,5 +1,9 @@
+#include <bdlb_arrayutil.h>
 #include <bsl_cstddef.h>
+#include <bsl_queue.h>
 #include <bsl_sstream.h>
+#include <bsl_utility.h>
+#include <lspcore_arithmeticutil.h>
 #include <lspcore_builtinprocedures.h>
 #include <lspcore_interpreter.h>
 #include <lspcore_listutil.h>
@@ -7,6 +11,9 @@
 #include <lspcore_pair.h>
 #include <lspcore_printutil.h>
 #include <lspcore_procedure.h>
+#include <lspcore_symbolutil.h>
+
+using namespace BloombergLP;
 
 namespace lspcore {
 namespace {
@@ -82,10 +89,199 @@ void BuiltinProcedures::isNull(const NativeProcedureUtil::Arguments& args) {
     args.argsAndOutput->front() = result;
 }
 
+// helpers for 'BuiltinProcedures::equal'
+namespace {
+
+class NotEqual {
+    const NativeProcedureUtil::Arguments* d_context_p;
+
+  public:
+    explicit NotEqual(const NativeProcedureUtil::Arguments& context)
+    : d_context_p(&context) {
+    }
+
+    bool operator()(const bdld::Datum& left, const bdld::Datum& right) const {
+#define TYPE_PAIR(LEFT, RIGHT) \
+    ((bsl::uint64_t(LEFT) << 32) | bsl::uint64_t(RIGHT))
+
+        switch (TYPE_PAIR(left.type(), right.type())) {
+            // numeric cases
+            case TYPE_PAIR(bdld::Datum::e_INTEGER, bdld::Datum::e_INTEGER64):
+            case TYPE_PAIR(bdld::Datum::e_INTEGER64, bdld::Datum::e_INTEGER):
+            case TYPE_PAIR(bdld::Datum::e_INTEGER, bdld::Datum::e_DOUBLE):
+            case TYPE_PAIR(bdld::Datum::e_DOUBLE, bdld::Datum::e_INTEGER):
+            case TYPE_PAIR(bdld::Datum::e_INTEGER, bdld::Datum::e_DECIMAL64):
+            case TYPE_PAIR(bdld::Datum::e_DECIMAL64, bdld::Datum::e_INTEGER):
+            case TYPE_PAIR(bdld::Datum::e_DOUBLE, bdld::Datum::e_DECIMAL64):
+            case TYPE_PAIR(bdld::Datum::e_DECIMAL64, bdld::Datum::e_DOUBLE):
+
+            case TYPE_PAIR(bdld::Datum::e_DECIMAL64, bdld::Datum::e_DECIMAL64):
+            case TYPE_PAIR(bdld::Datum::e_DOUBLE, bdld::Datum::e_DOUBLE):
+            case TYPE_PAIR(bdld::Datum::e_INTEGER, bdld::Datum::e_INTEGER):
+            case TYPE_PAIR(bdld::Datum::e_INTEGER64, bdld::Datum::e_INTEGER64):
+
+            case TYPE_PAIR(bdld::Datum::e_INTEGER64, bdld::Datum::e_DOUBLE):
+            case TYPE_PAIR(bdld::Datum::e_DOUBLE, bdld::Datum::e_INTEGER64):
+            case TYPE_PAIR(bdld::Datum::e_INTEGER64, bdld::Datum::e_DECIMAL64):
+            case TYPE_PAIR(bdld::Datum::e_DECIMAL64,
+                           bdld::Datum::e_INTEGER64): {
+                // defer to '!ArithmeticUtil::equal(...)'
+                bsl::vector<bdld::Datum> args;
+                args.push_back(left);
+                args.push_back(right);
+
+                NativeProcedureUtil::Arguments subcontext = *d_context_p;
+                subcontext.argsAndOutput                  = &args;
+
+                ArithmeticUtil::equal(subcontext);
+                return subcontext.argsAndOutput->front() ==
+                       bdld::Datum::createBoolean(false);
+            }
+            // types for which the operator defined in `bdld::Datum` suffices
+            case TYPE_PAIR(bdld::Datum::e_STRING, bdld::Datum::e_STRING):
+            case TYPE_PAIR(bdld::Datum::e_BOOLEAN, bdld::Datum::e_BOOLEAN):
+            case TYPE_PAIR(bdld::Datum::e_ERROR, bdld::Datum::e_ERROR):
+            case TYPE_PAIR(bdld::Datum::e_DATE, bdld::Datum::e_DATE):
+            case TYPE_PAIR(bdld::Datum::e_TIME, bdld::Datum::e_TIME):
+            case TYPE_PAIR(bdld::Datum::e_DATETIME, bdld::Datum::e_DATETIME):
+            case TYPE_PAIR(bdld::Datum::e_DATETIME_INTERVAL,
+                           bdld::Datum::e_DATETIME_INTERVAL):
+            case TYPE_PAIR(bdld::Datum::e_BINARY, bdld::Datum::e_BINARY):
+                return left != right;
+            // types that we drill down into
+            case TYPE_PAIR(bdld::Datum::e_ARRAY, bdld::Datum::e_ARRAY):
+                return (*this)(left.theArray(), right.theArray());
+            case TYPE_PAIR(bdld::Datum::e_MAP, bdld::Datum::e_MAP):
+                return mapsNotEqual(left.theMap(), right.theMap());
+            case TYPE_PAIR(bdld::Datum::e_INT_MAP, bdld::Datum::e_INT_MAP):
+                return mapsNotEqual(left.theIntMap(), right.theIntMap());
+            case TYPE_PAIR(bdld::Datum::e_USERDEFINED,
+                           bdld::Datum::e_USERDEFINED):
+                return (*this)(left.theUdt(), right.theUdt());
+            default:
+                return true;
+        }
+
+#undef TYPE_PAIR
+    }
+
+    bool operator()(const bdld::DatumArrayRef& left,
+                    const bdld::DatumArrayRef& right) const {
+        bsl::size_t length = left.length();
+        if (right.length() != length) {
+            return true;
+        }
+
+        for (bsl::size_t i = 0; i < length; ++i) {
+            if ((*this)(left[i], right[i])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    template <typename MapRef>
+    bool mapsNotEqual(const MapRef& left, const MapRef& right) const {
+        const bsl::size_t size = left.size();
+        if (right.size() != size) {
+            return true;
+        }
+
+        for (bsl::size_t i = 0; i < size; ++i) {
+            if (left[i].key() != right[i].key() ||
+                (*this)(left[i].value(), right[i].value())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    bool operator()(const bdld::DatumUdt& left,
+                    const bdld::DatumUdt& right) const {
+        if (left.type() != right.type()) {
+            return true;
+        }
+
+        switch (left.type() - d_context_p->typeOffset) {
+            case UserDefinedTypes::e_PAIR:
+                return (*this)(Pair::access(left), Pair::access(right));
+            case UserDefinedTypes::e_SYMBOL:
+                // TODO: This is safe, but I still feel I messed up symbols.
+                // Maybe what I need is to leave symbols as symbols, and then
+                // have a separate 'ResolvedSymbol' type.
+                return SymbolUtil::name(left) != SymbolUtil::name(right);
+            case UserDefinedTypes::e_PROCEDURE:
+            case UserDefinedTypes::e_NATIVE_PROCEDURE:
+            case UserDefinedTypes::e_BUILTIN:
+            default:
+                return left.data() == right.data();
+        }
+    }
+
+    bool operator()(const Pair& left, const Pair& right) const {
+        // In general, 'left' and 'right' can be arbitrarily large binary
+        // trees. Do a breadth-first traversal of them in tandem.
+        bsl::queue<bsl::pair<const Pair*, const Pair*> > queue;
+        queue.push(bsl::make_pair(&left, &right));
+
+        do {
+            const Pair& left  = *queue.front().first;
+            const Pair& right = *queue.front().second;
+
+            // This is a bit arcane, but the idea is that we're running the
+            // same block of code twice: once for each Pair's '.first' and then
+            // again for each Pair's '.second'. The data member to access is
+            // abstracted out using a data member pointer, 'member'. So, this
+            // code loops over the two cases: involving '.first' and then
+            // involving '.second'.
+            bdld::Datum Pair::*const members[] = { &Pair::first,
+                                                   &Pair::second };
+            for (bdld::Datum Pair::*const* memberIter = members;
+                 memberIter != bdlb::ArrayUtil::end(members);
+                 ++memberIter) {
+                bdld::Datum Pair::*const member = *memberIter;
+
+                if (Pair::isPair(left.*member, d_context_p->typeOffset)) {
+                    if (Pair::isPair(right.*member, d_context_p->typeOffset)) {
+                        queue.push(
+                            bsl::make_pair(&Pair::access(left.*member),
+                                           &Pair::access(right.*member)));
+                    }
+                    else {
+                        return true;
+                    }
+                }
+                else if ((*this)(left.first, right.first)) {
+                    return true;
+                }
+            }
+
+            queue.pop();
+        } while (!queue.empty());
+
+        return false;
+    }
+};
+
+}  // namespace
+
 void BuiltinProcedures::equal(const NativeProcedureUtil::Arguments& args) {
-    // TODO
-    throw bdld::Datum::createError(
-        -1, "\"equal?\" is not yet implemented", args.allocator);
+    bsl::vector<bdld::Datum>& argsVec = *args.argsAndOutput;
+
+    // Per Scheme convention, (equal?) is true, as is (equal? one-arg).
+    if (argsVec.size() <= 1) {
+        argsVec.resize(1);
+        argsVec.front() = bdld::Datum::createBoolean(true);
+        return;
+    }
+
+    const bdld::Datum result = bdld::Datum::createBoolean(
+        bsl::adjacent_find(argsVec.begin(), argsVec.end(), NotEqual(args)) ==
+        argsVec.end());
+    argsVec.resize(1);
+    argsVec.front() = result;
 }
 
 void BuiltinProcedures::list(const NativeProcedureUtil::Arguments& args) {
