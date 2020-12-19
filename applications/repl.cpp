@@ -44,7 +44,7 @@ int sets() {
                               typeOffset);
     bsl::cout << "\n";
 
-    const int values[] = { 10, 43, 134, -8, 0 };
+    const int values[] = { 10, 43, 134, -8, 0, 2, 2, 2 };
     for (const int* iter = values; iter != bdlb::ArrayUtil::end(values);
          ++iter) {
         set = lspcore::Set::insert(

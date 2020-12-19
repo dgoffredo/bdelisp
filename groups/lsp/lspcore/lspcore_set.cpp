@@ -174,6 +174,33 @@ const Set* balance(const Set* set, bslma::Allocator* allocator) {
     }
 }
 
+const Set* insertNew(const Set*             set,
+                     const bdld::Datum&     value,
+                     const Set::Comparator& before,
+                     bslma::Allocator*      allocator) {
+    if (!set) {
+        return new (*allocator) Set(value, 0, 0);
+    }
+
+    if (before(value, set->value())) {
+        return balance(new (*allocator) Set(
+                           set->value(),
+                           insertNew(set->left(), value, before, allocator),
+                           set->right()),
+                       allocator);
+    }
+
+    if (before(set->value(), value)) {
+        return balance(new (*allocator) Set(
+                           set->value(),
+                           set->left(),
+                           insertNew(set->right(), value, before, allocator)),
+                       allocator);
+    }
+
+    return set;
+}
+
 }  // namespace
 
 Set::Set(const bdld::Datum& value, const Set* left, const Set* right)
@@ -206,27 +233,11 @@ const Set* Set::insert(const Set*         set,
                        const bdld::Datum& value,
                        const Comparator&  before,
                        bslma::Allocator*  allocator) {
-    if (!set) {
-        return new (*allocator) Set(value, 0, 0);
+    if (Set::contains(set, value, before)) {
+        return set;
     }
 
-    if (before(value, set->value())) {
-        return balance(new (*allocator)
-                           Set(set->value(),
-                               insert(set->left(), value, before, allocator),
-                               set->right()),
-                       allocator);
-    }
-
-    if (before(set->value(), value)) {
-        return balance(new (*allocator)
-                           Set(set->value(),
-                               set->left(),
-                               insert(set->right(), value, before, allocator)),
-                       allocator);
-    }
-
-    return set;
+    return insertNew(set, value, before, allocator);
 }
 
 bool Set::contains(const Set*         set,
