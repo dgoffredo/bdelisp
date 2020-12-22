@@ -74,6 +74,11 @@ class Set {
                          const bdld::Datum& value,
                          const Comparator&  before);
 
+    static const Set* remove(const Set*         set,
+                             const bdld::Datum& value,
+                             const Comparator&  before,
+                             bslma::Allocator*  allocator);
+
     static bdld::Datum toList(const Set* set,
                               int        typeOffset,
                               bslma::Allocator*);

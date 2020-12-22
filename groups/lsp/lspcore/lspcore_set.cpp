@@ -12,8 +12,8 @@ namespace lspcore {
 namespace {
 
 // Tree Balancing
-// =========
-// A set is a binary tree ordered using the supplied "less than" predicate. To
+// ==============
+// A set is a binary tree ordered using a supplied "less than" predicate. To
 // insert a new element, we traverse the tree looking for an equivalent
 // element. If we find one, then we return the input tree (set is unchanged).
 // If we don't find it, then we return a new tree that shares as much as
@@ -201,6 +201,92 @@ const Set* insertNew(const Set*             set,
     return set;
 }
 
+// 'removalSubtree' is the part of 'remove' where we've already found the node
+// containing the value that we want to remove -- now we need to calculate the
+// new subtree to replace the subtree rooted at the removed node.
+// 'removalSubtree' returns a pair '(right child, replacement)', where 'right
+// child' is the right child of the node being calculated (except for at the
+// root of the subtree, where it instead is the left child), and where
+// 'replacement' is the node whose value will replace the value being removed,
+// i.e. the in-order predecessor of the removed value.
+bsl::pair<const Set*, const Set*> removalSubtree(const Set*        set,
+                                                 bslma::Allocator* allocator) {
+    BSLS_ASSERT_OPT(set);
+
+    if (!set->right()) {
+        // This is the rightmost node under the left child of the node to
+        // remove, i.e. this is the in-order predecessor of the value to
+        // remove.
+        // This is the value that will replace the node to remove. Our parent
+        // will take our left child, if any, and we propagate ourselves (more
+        // importantly, our 'value()') via the '.second' of the returned pair.
+        return bsl::make_pair(set->left(), set);
+    }
+
+    const bsl::pair<const Set*, const Set*> results =
+        removalSubtree(set->right(), allocator);
+    const Set* const rightChild  = results.first;
+    const Set* const replacement = results.second;
+    return bsl::make_pair(
+        balance(new (*allocator) Set(set->value(), set->left(), rightChild),
+                allocator),
+        replacement);
+}
+
+const Set* removeExisting(const Set*             set,
+                          const bdld::Datum&     value,
+                          const Set::Comparator& before,
+                          bslma::Allocator*      allocator) {
+    if (!set) {
+        return set;
+    }
+
+    if (before(value, set->value())) {
+        return balance(
+            new (*allocator)
+                Set(set->value(),
+                    removeExisting(set->left(), value, before, allocator),
+                    set->right()),
+            allocator);
+    }
+
+    if (before(set->value(), value)) {
+        return balance(
+            new (*allocator)
+                Set(set->value(),
+                    set->left(),
+                    removeExisting(set->right(), value, before, allocator)),
+            allocator);
+    }
+
+    // We found the node to remove. There are three cases:
+    // - No children? Return null.
+    // - One child? Return it.
+    // - Two children? Put your pants on.
+    if (!set->left() && !set->right()) {
+        return 0;
+    }
+    if (!set->left()) {
+        return set->right();
+    }
+    if (!set->right()) {
+        return set->left();
+    }
+
+    // We can pick either the in-order predecessor or the in-order successor.
+    // There's probably a clever choice that minimizes tree rotations, but
+    // let's just pick the in-order predecessor. That node will replace this
+    // one, and we reparent stuff so the tree remains correct, while
+    // rebalancing as needed.
+    const bsl::pair<const Set*, const Set*> results =
+        removalSubtree(set->left(), allocator);
+    const Set* const leftChild   = results.first;
+    const Set* const predecessor = results.second;
+    return balance(new (*allocator)
+                       Set(predecessor->value(), leftChild, set->right()),
+                   allocator);
+}
+
 }  // namespace
 
 Set::Set(const bdld::Datum& value, const Set* left, const Set* right)
@@ -256,6 +342,17 @@ bool Set::contains(const Set*         set,
     }
 
     return true;
+}
+
+const Set* Set::remove(const Set*         set,
+                       const bdld::Datum& value,
+                       const Comparator&  before,
+                       bslma::Allocator*  allocator) {
+    if (!Set::contains(set, value, before)) {
+        return set;
+    }
+
+    return removeExisting(set, value, before, allocator);
 }
 
 bdld::Datum Set::toList(const Set*        set,
