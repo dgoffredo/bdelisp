@@ -8,6 +8,7 @@ add_library(lsp
     lspcore/lspcore_arithmeticutil.cpp
     lspcore/lspcore_builtinprocedures.cpp
     lspcore/lspcore_builtins.cpp
+    lspcore/lspcore_datumutil.cpp
     lspcore/lspcore_endian.cpp
     lspcore/lspcore_environment.cpp
     lspcore/lspcore_interpreter.cpp

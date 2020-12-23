@@ -124,7 +124,11 @@ int interpreter() {
         { "equal?", &lspcore::BuiltinProcedures::equal },
         { "list", &lspcore::BuiltinProcedures::list },
         { "apply", &lspcore::BuiltinProcedures::apply },
-        { "raise", &lspcore::BuiltinProcedures::raise }
+        { "raise", &lspcore::BuiltinProcedures::raise },
+        { "set", &lspcore::BuiltinProcedures::set },
+        { "set-contains?", &lspcore::BuiltinProcedures::setContains },
+        { "set-insert", &lspcore::BuiltinProcedures::setInsert },
+        { "set-remove", &lspcore::BuiltinProcedures::setRemove }
     };
 
     for (const Entry* entry = procedures;

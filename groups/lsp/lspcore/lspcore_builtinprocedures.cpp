@@ -5,12 +5,14 @@
 #include <bsl_utility.h>
 #include <lspcore_arithmeticutil.h>
 #include <lspcore_builtinprocedures.h>
+#include <lspcore_datumutil.h>
 #include <lspcore_interpreter.h>
 #include <lspcore_listutil.h>
 #include <lspcore_nativeprocedureutil.h>
 #include <lspcore_pair.h>
 #include <lspcore_printutil.h>
 #include <lspcore_procedure.h>
+#include <lspcore_set.h>
 #include <lspcore_symbolutil.h>
 
 using namespace BloombergLP;
@@ -328,6 +330,70 @@ void BuiltinProcedures::raise(const NativeProcedureUtil::Arguments& args) {
     enforceArity("raise", 1, args);
 
     throw args.argsAndOutput->front();
+}
+
+void BuiltinProcedures::set(const NativeProcedureUtil::Arguments& args) {
+    // Return a 'Set' of the arguments.
+    const Set*            set = 0;
+    const Set::Comparator before =
+        DatumUtil::lessThanComparator(args.typeOffset);
+
+    const bsl::vector<bdld::Datum> elements = *args.argsAndOutput;
+    for (bsl::size_t i = 0; i < elements.size(); ++i) {
+        set = Set::insert(set, elements[i], before, args.allocator);
+    }
+
+    const bdld::Datum result = Set::create(set, args.typeOffset);
+    args.argsAndOutput->resize(1);
+    args.argsAndOutput->front() = result;
+}
+
+void BuiltinProcedures::setContains(
+    const NativeProcedureUtil::Arguments& args) {
+    enforceArity("set-contains?", 2, args);
+
+    const Set*            set   = Set::access((*args.argsAndOutput)[0]);
+    const bdld::Datum&    value = (*args.argsAndOutput)[1];
+    const Set::Comparator before =
+        DatumUtil::lessThanComparator(args.typeOffset);
+
+    const bdld::Datum result =
+        bdld::Datum::createBoolean(Set::contains(set, value, before));
+    args.argsAndOutput->resize(1);
+    args.argsAndOutput->front() = result;
+}
+
+namespace {
+
+void setInsertOrRemove(
+    bsl::string_view name,
+    const Set* (*function)(
+        const Set*,
+        const bdld::Datum&,
+        const bsl::function<bool(const bdld::Datum&, const bdld::Datum&)>&,
+        bslma::Allocator*),
+    const NativeProcedureUtil::Arguments& args) {
+    enforceArity(name, 2, args);
+
+    const Set*            set   = Set::access((*args.argsAndOutput)[0]);
+    const bdld::Datum&    value = (*args.argsAndOutput)[1];
+    const Set::Comparator before =
+        DatumUtil::lessThanComparator(args.typeOffset);
+
+    set                      = function(set, value, before, args.allocator);
+    const bdld::Datum result = Set::create(set, args.typeOffset);
+    args.argsAndOutput->resize(1);
+    args.argsAndOutput->front() = result;
+}
+
+}  // namespace
+
+void BuiltinProcedures::setInsert(const NativeProcedureUtil::Arguments& args) {
+    setInsertOrRemove("set-insert", &Set::insert, args);
+}
+
+void BuiltinProcedures::setRemove(const NativeProcedureUtil::Arguments& args) {
+    setInsertOrRemove("set-remove", &Set::remove, args);
 }
 
 }  // namespace lspcore

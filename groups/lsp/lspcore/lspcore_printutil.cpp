@@ -20,6 +20,7 @@
 #include <lspcore_pair.h>
 #include <lspcore_printutil.h>
 #include <lspcore_procedure.h>
+#include <lspcore_set.h>
 #include <lspcore_symbolutil.h>
 #include <lspcore_userdefinedtypes.h>
 
@@ -31,12 +32,11 @@ namespace {
 // flags that can be bitwise or'd together and passed to 'printList':
 const int k_NO_PARENTHESES = 1;
 
-class PrintVisitor {
+struct PrintVisitor {
     bsl::ostream&                 stream;
     int                           typeOffset;
     bsl::vector<const Procedure*> procedureStack;
 
-  public:
     explicit PrintVisitor(bsl::ostream& stream, int typeOffset)
     : stream(stream)
     , typeOffset(typeOffset) {
@@ -65,6 +65,7 @@ class PrintVisitor {
     void printMap(const MapRef&);
     void printPointer(const void*);
     void printProcedure(const Procedure&);
+    void printSet(const Set*);
 };
 
 void PrintVisitor::operator()(bslmf::Nil) {
@@ -141,6 +142,9 @@ void PrintVisitor::operator()(const bdld::DatumUdt& value) {
             stream << "#procedure[native ";
             printPointer(value.data());
             stream << "]";
+            return;
+        case UserDefinedTypes::e_SET:
+            printSet(Set::access(value));
             return;
     }
 
@@ -292,6 +296,50 @@ void PrintVisitor::printProcedure(const Procedure& value) {
     printList(*value.body, k_NO_PARENTHESES);
     procedureStack.pop_back();
     stream << "]";
+}
+
+void PrintVisitor::printSet(const Set* set) {
+    stream << "#{";
+
+    // in-order depth-first traversal
+    class SetVisitor {
+        PrintVisitor& print;
+        bool          first;
+
+      public:
+        explicit SetVisitor(PrintVisitor& print)
+        : print(print)
+        , first(true) {
+        }
+
+        void operator()(const Set* set) {
+            if (!set) {
+                return;
+            }
+
+            // predecessors
+            (*this)(set->left());
+
+            // separating space, unless we're first
+            if (first) {
+                first = false;
+            }
+            else {
+                print.stream << " ";
+            }
+
+            // our value
+            set->value().apply(print);
+
+            // successors
+            (*this)(set->right());
+        }
+    };
+
+    SetVisitor visit(*this);
+    visit(set);
+
+    stream << "}";
 }
 
 }  // namespace

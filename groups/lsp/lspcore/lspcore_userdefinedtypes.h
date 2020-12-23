@@ -11,6 +11,7 @@ struct UserDefinedTypes {
         e_SYMBOL,
         e_PROCEDURE,
         e_NATIVE_PROCEDURE,
+        e_SET,
         e_BUILTIN
         // don't forget to update 'k_COUNT'
     };

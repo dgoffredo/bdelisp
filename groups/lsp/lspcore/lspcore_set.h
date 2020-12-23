@@ -77,11 +77,16 @@ class Set {
     static const Set* remove(const Set*         set,
                              const bdld::Datum& value,
                              const Comparator&  before,
-                             bslma::Allocator*  allocator);
+                             bslma::Allocator*);
 
     static bdld::Datum toList(const Set* set,
                               int        typeOffset,
                               bslma::Allocator*);
+
+    static const Set* access(const bdld::Datum&);
+    static const Set* access(const bdld::DatumUdt&);
+
+    static bdld::Datum create(const Set* set, int typeOffset);
 };
 
 #ifdef BSLS_PLATFORM_CPU_64_BIT

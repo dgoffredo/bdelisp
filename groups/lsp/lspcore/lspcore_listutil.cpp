@@ -1,3 +1,4 @@
+#include <bsl_functional.h>
 #include <bsl_iterator.h>
 #include <bsls_assert.h>
 #include <lspcore_listutil.h>
@@ -55,6 +56,42 @@ bool ListUtil::isProperList(const bdld::Datum& datum, int typeOffset) {
         rest = Pair::access(rest).second;
     }
     return rest.isNull();
+}
+
+bool ListUtil::lessThan(
+    const bdld::Datum& leftDatum,
+    const bdld::Datum& rightDatum,
+    const bsl::function<bool(const bdld::Datum&, const bdld::Datum&)>&
+        before) {
+    bdld::Datum left  = leftDatum;
+    bdld::Datum right = rightDatum;
+
+    for (;;) {
+        if (left.isNull() && right.isNull()) {
+            return false;
+        }
+
+        if (left.isNull()) {
+            return true;
+        }
+
+        if (right.isNull()) {
+            return false;
+        }
+
+        const Pair& leftPair  = Pair::access(left);
+        const Pair& rightPair = Pair::access(right);
+        if (before(leftPair.first, rightPair.first)) {
+            return true;
+        }
+
+        if (before(rightPair.first, leftPair.first)) {
+            return false;
+        }
+
+        left  = leftPair.second;
+        right = rightPair.second;
+    }
 }
 
 }  // namespace lspcore

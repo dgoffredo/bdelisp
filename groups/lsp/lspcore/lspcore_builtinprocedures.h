@@ -18,6 +18,11 @@ struct BuiltinProcedures {
     static FUNCTION(apply);
     static FUNCTION(raise);
 
+    static FUNCTION(set);
+    static FUNCTION(setContains);
+    static FUNCTION(setInsert);
+    static FUNCTION(setRemove);
+
 #undef FUNCTION
 };
 

@@ -5,6 +5,7 @@
 #include <bsls_assert.h>
 #include <lspcore_listutil.h>
 #include <lspcore_set.h>
+#include <lspcore_userdefinedtypes.h>
 
 using namespace BloombergLP;
 
@@ -370,6 +371,21 @@ bdld::Datum Set::toList(const Set*        set,
 
     return ListUtil::createList(
         elements, bdlb::ArrayUtil::end(elements), typeOffset, allocator);
+}
+
+const Set* Set::access(const bdld::Datum& datum) {
+    BSLS_ASSERT(datum.isUdt());
+    return access(datum.theUdt());
+}
+
+const Set* Set::access(const bdld::DatumUdt& udt) {
+    return static_cast<const Set*>(udt.data());
+}
+
+bdld::Datum Set::create(const Set* set, int typeOffset) {
+    return bdld::Datum::createUdt(
+        const_cast<void*>(static_cast<const void*>(set)),
+        UserDefinedTypes::e_SET + typeOffset);
 }
 
 }  // namespace lspcore

@@ -2,6 +2,7 @@
 #define INCLUDED_LSPCORE_LISTUTIL
 
 #include <bdld_datum.h>
+#include <bsl_functional.h>
 
 namespace BloombergLP {
 namespace bslma {
@@ -67,6 +68,16 @@ struct ListUtil {
     // Use the specified 'typeOffset' when determining the user-defined type
     // code for a 'Pair'.
     static bool isProperList(const bdld::Datum& datum, int typeOffset);
+
+    // Return whether the specified 'left' is lexicographically less than the
+    // specified 'right'. Use the specified 'before' to determine when one
+    // element is less than another. The behavior is undefined unless each of
+    // 'left' and 'right' is either a 'Pair' or null.
+    static bool lessThan(
+        const bdld::Datum& left,
+        const bdld::Datum& right,
+        const bsl::function<bool(const bdld::Datum&, const bdld::Datum&)>&
+            before);
 };
 
 inline bdld::Datum ListUtil::createList(
