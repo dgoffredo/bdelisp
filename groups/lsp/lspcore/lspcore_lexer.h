@@ -44,6 +44,7 @@ struct LexerToken {
         e_CLOSE_SQUARE_BRACKET,
         e_OPEN_CURLY_BRACE,
         e_CLOSE_CURLY_BRACE,
+        e_OPEN_SET_BRACE,
         e_QUOTE,
         e_QUASIQUOTE,
         e_UNQUOTE,

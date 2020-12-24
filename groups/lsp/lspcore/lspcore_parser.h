@@ -66,6 +66,7 @@ class Parser {
     bdld::Datum parseList(const LexerToken&);
     bdld::Datum parseArray(const LexerToken&);
     bdld::Datum parseMap(const LexerToken&);
+    bdld::Datum parseSet(const LexerToken&);
     bdld::Datum parseQuoteLike(const LexerToken&);
     bdld::Datum parseComment(const LexerToken&);
     bdld::Datum parseDate(const LexerToken&);

@@ -13,8 +13,10 @@
 #include <bsl_numeric.h>
 #include <bsl_sstream.h>
 #include <bsls_timeinterval.h>
+#include <lspcore_datumutil.h>
 #include <lspcore_listutil.h>
 #include <lspcore_parser.h>
+#include <lspcore_set.h>
 #include <lspcore_symbolutil.h>
 
 using namespace BloombergLP;
@@ -104,6 +106,8 @@ DEFINE_PARSER_ERROR(
 DEFINE_PARSER_ERROR(DuplicateMapKey,
                     "dict literal beginning here has one or more duplicated "
                     "key values. Keys must be unique.");
+DEFINE_PARSER_ERROR(IncompleteSet,
+                    "input ended before the set that starts here was closed");
 
 #undef DEFINE_PARSER_ERROR
 
@@ -286,6 +290,8 @@ bdld::Datum Parser::parseDatum() {
             return parseArray(token);
         case LexerToken::e_OPEN_CURLY_BRACE:
             return parseMap(token);
+        case LexerToken::e_OPEN_SET_BRACE:
+            return parseSet(token);
         case LexerToken::e_CLOSE_PARENTHESIS:
         case LexerToken::e_CLOSE_SQUARE_BRACKET:
         case LexerToken::e_CLOSE_CURLY_BRACE:
@@ -586,6 +592,33 @@ bdld::Datum Parser::parseMap(const LexerToken& token) {
             return createStringMap(items, token, d_datumAllocator_p);
         default:
             throw InvalidMapKeyType(token);
+    }
+}
+
+bdld::Datum Parser::parseSet(const LexerToken& token) {
+    // The set starts out containing its unevaluated elements. Later, the
+    // interpreter will produce a new set that contains the evaluated elements.
+    const Set*            set = 0;
+    DatumUtil::Comparator lessThan =
+        DatumUtil::lessThanComparator(d_typeOffset);
+
+    // Consume array elements (datums) until either we hit "}" (done), we hit
+    // EOF (error), or some other exception is thrown (implicit error).
+    for (;;) {
+        try {
+            set = Set::insert(set, parseDatum(), lessThan, d_datumAllocator_p);
+        }
+        catch (const NotAValue& error) {
+            if (error.where.kind == LexerToken::e_CLOSE_CURLY_BRACE) {
+                // finished
+                return Set::create(set, d_typeOffset);
+            }
+            // some other unexpected punctutation: propagate the error
+            throw;
+        }
+        catch (const EofError&) {
+            throw IncompleteSet(token);
+        }
     }
 }
 

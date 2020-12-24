@@ -75,6 +75,8 @@ const LexerToken::Kind k_subpatterns[] = {
     LexerToken::e_OPEN_CURLY_BRACE,
 #define CLOSE_CURLY_BRACE R"re(\})re"
     LexerToken::e_CLOSE_CURLY_BRACE,
+#define OPEN_SET_BRACE "#{"
+    LexerToken::e_OPEN_SET_BRACE,
 #define QUOTE R"re(')re"
     LexerToken::e_QUOTE,
 #define QUASIQUOTE R"re(`)re"
@@ -120,15 +122,17 @@ const LexerToken::Kind k_subpatterns[] = {
 
 // The subpattern macros (e.g. 'STRING', 'UNQUOTE') must appear within
 // 'k_PATTERN' in the same order as defined above.
-const char k_TOKEN_PATTERN[] = "(" TRUE OR FALSE OR STRING OR BYTES OR DOUBLE
-    OR DECIMAL64 OR INT32 OR INT64 OR WHITESPACE OR OPEN_PARENTHESIS OR
-        CLOSE_PARENTHESIS OR OPEN_SQUARE_BRACKET OR CLOSE_SQUARE_BRACKET OR
-            OPEN_CURLY_BRACE OR CLOSE_CURLY_BRACE OR QUOTE OR QUASIQUOTE OR
-                UNQUOTE OR UNQUOTE_SPLICING OR SYNTAX OR QUASISYNTAX OR
-                    UNSYNTAX OR UNSYNTAX_SPLICING OR COMMENT_LINE OR
-                        COMMENT_DATUM OR COMMENT_SHEBANG OR DATE OR TIME OR
-                            DATETIME OR DATETIME_INTERVAL OR ERROR_TAG OR
-                                USER_DEFINED_TYPE_TAG OR PAIR_SEPARATOR ")";
+const char k_TOKEN_PATTERN[] =
+    "(" TRUE OR FALSE OR STRING OR BYTES OR DOUBLE OR DECIMAL64 OR INT32 OR
+        INT64 OR WHITESPACE OR OPEN_PARENTHESIS OR CLOSE_PARENTHESIS OR
+            OPEN_SQUARE_BRACKET OR CLOSE_SQUARE_BRACKET OR OPEN_CURLY_BRACE OR
+                CLOSE_CURLY_BRACE OR OPEN_SET_BRACE OR QUOTE OR QUASIQUOTE OR
+                    UNQUOTE OR UNQUOTE_SPLICING OR SYNTAX OR QUASISYNTAX OR
+                        UNSYNTAX OR UNSYNTAX_SPLICING OR COMMENT_LINE OR
+                            COMMENT_DATUM OR COMMENT_SHEBANG OR DATE OR TIME OR
+                                DATETIME OR DATETIME_INTERVAL OR ERROR_TAG OR
+                                    USER_DEFINED_TYPE_TAG OR PAIR_SEPARATOR
+    ")";
 
 // Symbols are special. Rather than being one of the alternatives in the
 // 'k_TOKEN_PATTERN', the symbol pattern is instead a fallback. The logic is
