@@ -31,7 +31,7 @@ struct SymbolUtil {
     static bdld::Datum create(
         const bsl::pair<const bsl::string, bdld::Datum>& entry,
         int                                              typeOffset);
-    static bdld::Datum create(bsl::size_t argumentsOffset, int typeOffset);
+    static bdld::Datum create(const bsl::string* parameterName, int typeOffset);
 
     // Return a 'Datum' containing or referring to a string that is the name
     // associated with the specified 'symbol'. The behavior is undefined if
@@ -70,7 +70,7 @@ struct SymbolUtil {
     static bool isResolved(const bdld::Datum& datum);
 
   private:
-    enum Encoding { e_DATUM_PTR, e_IN_PLACE, e_ENTRY_PTR, e_ARGUMENTS_OFFSET };
+    enum Encoding { e_DATUM_PTR, e_IN_PLACE, e_ENTRY_PTR, e_PARAMETER_NAME };
 
     static Encoding encoding(void* udtData);
 
@@ -112,7 +112,7 @@ inline bool SymbolUtil::isResolved(const bdld::Datum& datum) {
 // 1. 'bdld::Datum*' where the datum has type 'bdld::Datum::e_STRING'
 // 2. tiny in-place string
 // 3. 'bsl::pair<bsl::string, bdld::Datum>*' to a resolved environment entry
-// 4. an offset into the local environment's vector of procedure arguments
+// 4. a pointer into an environment's vector of procedure parameter names
 //
 // In all cases, the length of the name of a symbol must not exceed 65,535
 // bytes. This allows 'bdld::Datum::createStringRef' to be used on 32-bit
@@ -178,7 +178,7 @@ inline bool SymbolUtil::isResolved(const bdld::Datum& datum) {
 //     bit position:    7   6   5   4   3   2       1   0
 //     bit value:       _   _   _   _   _   _       1   1
 //                      ^   ^   ^   ^   ^   ^       ^   ^
-//                      argument-offset-index      selector
+//                      argument-name-ptr          selector
 //
 //
 // In cases (1), (3), and (4) -- so, all but in-place string -- the
@@ -222,10 +222,10 @@ inline bdld::Datum SymbolUtil::create(
                                   UserDefinedTypes::e_SYMBOL + typeOffset);
 }
 
-inline bdld::Datum SymbolUtil::create(bsl::size_t argumentsOffset,
+inline bdld::Datum SymbolUtil::create(const bsl::string* parameterName,
                                       int         typeOffset) {
     void* const fakePtr =
-        reinterpret_cast<void*>((argumentsOffset << 2) | e_ARGUMENTS_OFFSET);
+        reinterpret_cast<void*>(reinterpret_cast<bsls::Types::UintPtr>(parameterName) | e_PARAMETER_NAME);
 
     return bdld::Datum::createUdt(fakePtr,
                                   UserDefinedTypes::e_SYMBOL + typeOffset);
@@ -280,7 +280,7 @@ inline bdld::Datum SymbolUtil::name(const bdld::DatumUdt& udt) {
         default:
             (void)format;
             BSLS_ASSERT(format == e_ENTRY_PTR);
-            // 'e_ARGUMENTS_OFFSET' is disallowed, because we don't have an
+            // 'e_PARAMETER_NAME' is disallowed, because we don't have an
             // 'Environment' where we can look up the name.
             return nameEntry(udt.data());
     }
@@ -298,7 +298,7 @@ inline bdld::Datum SymbolUtil::name(const bdld::DatumUdt& udt,
             return nameEntry(udt.data());
         default:
             (void)format;
-            BSLS_ASSERT(format == e_ARGUMENTS_OFFSET);
+            BSLS_ASSERT(format == e_PARAMETER_NAME);
             return nameOffset(udt.data(), procedure);
     }
 }
@@ -359,11 +359,18 @@ inline const bsl::pair<const bsl::string, bdld::Datum>* SymbolUtil::entry(
 }
 
 inline const bsl::pair<const bsl::string, bdld::Datum>* SymbolUtil::fromOffset(
-    void* udtData, const Environment& environment) {
-    BSLS_ASSERT(encoding(udtData) == e_ARGUMENTS_OFFSET);
+    void* udtData, const Procedure& procedure) {
+    // AUGHH
+    BSLS_ASSERT(encoding(udtData) == e_PARAMETER_NAME);
 
-    const bsls::Types::UintPtr offset =
-        reinterpret_cast<bsls::Types::UintPtr>(udtData) >> 2;
+    // 11111...11111100, i.e. unset the lowest two bits.
+    const bsls::Types::UintPtr mask = ~bsls::Types::UintPtr(3);
+
+    const void* const realPtr = reinterpret_cast<const void*>(
+        reinterpret_cast<bsls::Types::UintPtr>(udtData) & mask);
+    
+    const bsl::string* const name = static_cast<const bsl::string*>(realPtr);
+    const int offset = name == &procedure.restParameter ? procedure.positionalParameters.size() : name - procedure.positionalParameters.data();
 
     BSLS_ASSERT(offset < environment.arguments().size());
     BSLS_ASSERT(environment.arguments()[offset]);
@@ -373,7 +380,7 @@ inline const bsl::pair<const bsl::string, bdld::Datum>* SymbolUtil::fromOffset(
 
 inline bsl::string_view SymbolUtil::fromOffset(void*            udtData,
                                                const Procedure& procedure) {
-    BSLS_ASSERT(encoding(udtData) == e_ARGUMENTS_OFFSET);
+    BSLS_ASSERT(encoding(udtData) == e_PARAMETER_NAME);
 
     const bsls::Types::UintPtr offset =
         reinterpret_cast<bsls::Types::UintPtr>(udtData) >> 2;
@@ -422,7 +429,7 @@ inline const bsl::pair<const bsl::string, bdld::Datum>* SymbolUtil::resolve(
             return entry(symbol.data());
         default:
             (void)format;
-            BSLS_ASSERT(format == e_ARGUMENTS_OFFSET);
+            BSLS_ASSERT(format == e_PARAMETER_NAME);
             return fromOffset(symbol.data(), environment);
     }
 }
